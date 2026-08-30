@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,7 +9,7 @@ import {
   Sliders, 
   Landmark, 
   ShieldCheck,
-  Zap
+  BookOpen
 } from "lucide-react";
 import { SyncButton } from "./SyncButton";
 
@@ -21,6 +21,7 @@ export function Sidebar() {
     { name: "Kontobevægelser", href: "/transactions", icon: ArrowLeftRight },
     { name: "Abonnementer", href: "/subscriptions", icon: Repeat },
     { name: "Forbindelse & Regler", href: "/settings", icon: Sliders },
+    { name: "Hjælp & Guide", href: "/help", icon: BookOpen },
   ];
 
   return (
@@ -63,7 +64,7 @@ export function Sidebar() {
       </div>
 
       {/* Footer / Sync info */}
-      <div className="p-4 m-3 rounded-xl bg-slate-805/80 border border-slate-800 bg-slate-800/40">
+      <div className="p-4 m-3 rounded-xl bg-slate-800/40 border border-slate-800">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
