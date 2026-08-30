@@ -13,6 +13,8 @@ model Account {
   iban             String?
   accountNumber    String?
   name             String
+  customName       String?
+  isHidden         Boolean       @default(false)
   currency         String        @default("DKK")
   balance          Float         @default(0.0)
   bookedBalance    Float?
@@ -85,4 +87,10 @@ model ConsentSession {
   validUntil DateTime
   status     String   @default("active") // "active" | "expired" | "revoked"
   createdAt  DateTime @default(now())
+}
+
+model UserPreference {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
