@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id               String        @id @default(uuid())
+  bankName         String        @default("Nordea")
+  iban             String?
+  accountNumber    String?
+  name             String
+  currency         String        @default("DKK")
+  balance          Float         @default(0.0)
+  bookedBalance    Float?
+  availableBalance Float?
+  updatedAt        DateTime      @updatedAt
+  transactions     Transaction[]
+}
+
+model Transaction {
+  id             String    @id @default(uuid())
+  accountId      String
+  account        Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  amount         Float
+  date           DateTime
+  valueDate      DateTime?
+  text           String
+  counterparty   String?
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id])
+  isSubscription Boolean   @default(false)
+  status         String    @default("booked") // "booked" | "pending"
+  hash           String    @unique
+  rawData        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Category {
+  id             String               @id @default(uuid())
+  name           String               @unique
+  color          String               @default("#3b82f6")
+  icon           String               @default("tag")
+  isIncome       Boolean              @default(false)
+  transactions   Transaction[]
+  rules          ClassificationRule[]
+  subscriptions  Subscription[]
+}
+
+model Subscription {
+  id              String    @id @default(uuid())
+  name            String
+  amount          Float
+  interval        String    @default("monthly") // "weekly" | "monthly" | "quarterly" | "yearly"
+  categoryId      String?
+  category        Category? @relation(fields: [categoryId], references: [id])
+  nextPaymentDate DateTime
+  lastPaymentDate DateTime
+  status          String    @default("active") // "active" | "paused" | "cancelled"
+  detectedAuto    Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ClassificationRule {
+  id             String   @id @default(uuid())
+  pattern        String
+  matchType      String   @default("contains") // "contains" | "regex" | "exact"
+  categoryId     String
+  category       Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isSubscription Boolean  @default(false)
+  priority       Int      @default(0)
+  createdAt      DateTime @default(now())
+}
+
+model ConsentSession {
+  id         String   @id @default(uuid())
+  aggregator String   @default("enable_banking")
+  bankName   String   @default("Nordea")
+  sessionId  String   @unique
+  validUntil DateTime
+  status     String   @default("active") // "active" | "expired" | "revoked"
+  createdAt  DateTime @default(now())
+}
