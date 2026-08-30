@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "tsx lib/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate-keys": "node scripts/generate-keys.js",
+    "reset-data": "node scripts/reset-data.js"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

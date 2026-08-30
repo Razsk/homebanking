@@ -1,49 +1,34 @@
 import { describe, it, expect } from "vitest";
-import { EnableBankingClient, MockNordeaProvider } from "../lib/enable-banking";
+import { EnableBankingClient } from "../lib/enable-banking";
 
-describe("Seam 4: Enable Banking & Mock Adapter", () => {
-  it("provides complete realistic Danish Nordea mock session", () => {
-    const session = MockNordeaProvider.getMockSession();
-    expect(session.sessionId).toContain("mock-nordea-session");
-    expect(session.accounts).toHaveLength(3);
+describe("Seam 4: Enable Banking Live Client & Validation", () => {
+  it("detects configuration status and reports missing keys accurately", () => {
+    const client = new EnableBankingClient({ appId: "", keyId: "" });
+    const status = client.getConfigurationStatus();
 
-    const lonAcc = session.accounts.find((a) => a.accountId === "mock-acc-lon");
-    expect(lonAcc).toBeDefined();
-    expect(lonAcc?.name).toBe("Nordea Lønkonto");
-    expect(lonAcc?.currency).toBe("DKK");
-    expect(lonAcc?.balance).toBeGreaterThan(0);
+    expect(status.isConfigured).toBe(false);
+    expect(status.hasPrivateKey).toBe(true);
+    expect(status.hasPublicKey).toBe(true);
+    expect(status.publicKey).toContain("BEGIN PUBLIC KEY");
   });
 
-  it("generates realistic historical transactions with booked and pending states", () => {
-    const lonTxs = MockNordeaProvider.getMockTransactions("mock-acc-lon");
-    expect(lonTxs.length).toBeGreaterThan(10);
+  it("throws clear explanatory error when attempting auth without credentials", async () => {
+    const client = new EnableBankingClient({ appId: "", keyId: "" });
 
-    const hasSalary = lonTxs.some((t) => t.amount > 0 && t.text.includes("Løn"));
-    const hasStreaming = lonTxs.some((t) => t.text.includes("Netflix") || t.text.includes("Spotify"));
-    const hasPending = lonTxs.some((t) => t.status === "pending");
-    const hasBooked = lonTxs.some((t) => t.status === "booked");
-
-    expect(hasSalary).toBe(true);
-    expect(hasStreaming).toBe(true);
-    expect(hasPending).toBe(true);
-    expect(hasBooked).toBe(true);
+    await expect(client.startAuth("Nordea", "DK")).rejects.toThrowError(
+      /Enable Banking API-nøgler mangler/
+    );
   });
 
-  it("gracefully falls back to mock auth URL when live API keys are not supplied", async () => {
-    const client = new EnableBankingClient();
-    expect(client.isConfigured()).toBe(false);
+  it("validates that isConfigured returns true only when appId and keyId are non-empty", () => {
+    const unconfigured = new EnableBankingClient({ appId: "", keyId: "" });
+    expect(unconfigured.isConfigured()).toBe(false);
 
-    const authResult = await client.startAuth("Nordea", "DK", "test_state_123");
-    expect(authResult.url).toContain("code=mock_nordea_auth_code");
-    expect(authResult.url).toContain("state=test_state_123");
-    expect(authResult.sessionId).toContain("mock-session");
-  });
-
-  it("exchanges mock authorization code for active accounts", async () => {
-    const client = new EnableBankingClient();
-    const result = await client.createSession("mock_nordea_auth_code");
-
-    expect(result.accounts).toHaveLength(3);
-    expect(result.accounts[0].name).toContain("Nordea");
+    const configured = new EnableBankingClient({
+      appId: "mock-app-id",
+      keyId: "mock-key-id",
+      privateKeyPath: "./private.key",
+    });
+    expect(configured.isConfigured()).toBe(true);
   });
 });

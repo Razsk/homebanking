@@ -1,11 +1,9 @@
-﻿import { PrismaClient } from "@prisma/client";
-import { MockNordeaProvider } from "./enable-banking";
-import { generateTransactionHash, classifyTransaction, detectSubscriptionsFromTransactions } from "./classifier";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("Seeding Danish Homebanking categories and rules...");
+  console.log("Seeding standard danske kategorier og klassificeringsregler...");
 
   // 1. Create standard categories
   const categoriesData = [
@@ -84,105 +82,7 @@ async function main() {
     }
   }
 
-  // 3. Create Mock Nordea Accounts and Transactions
-  const mockSession = MockNordeaProvider.getMockSession();
-  const dbRules = await prisma.classificationRule.findMany({ include: { category: true } });
-  const allCategories = Object.values(categories);
-
-  const createdTransactions: any[] = [];
-
-  for (const acc of mockSession.accounts) {
-    const accountRecord = await prisma.account.upsert({
-      where: { id: acc.accountId },
-      update: {
-        name: acc.name,
-        iban: acc.iban,
-        accountNumber: acc.accountNumber,
-        currency: acc.currency,
-        balance: acc.balance,
-        bookedBalance: acc.bookedBalance,
-        availableBalance: acc.availableBalance,
-      },
-      create: {
-        id: acc.accountId,
-        bankName: "Nordea",
-        name: acc.name,
-        iban: acc.iban,
-        accountNumber: acc.accountNumber,
-        currency: acc.currency,
-        balance: acc.balance,
-        bookedBalance: acc.bookedBalance,
-        availableBalance: acc.availableBalance,
-      },
-    });
-
-    const txs = MockNordeaProvider.getMockTransactions(acc.accountId);
-    for (const tx of txs) {
-      const hash = generateTransactionHash(acc.accountId, tx.date, tx.amount, tx.text);
-      const { categoryId, isSubscription } = classifyTransaction(
-        tx.text,
-        tx.counterparty,
-        tx.amount,
-        dbRules,
-        allCategories
-      );
-
-      const txRecord = await prisma.transaction.upsert({
-        where: { hash },
-        update: {
-          status: tx.status,
-          amount: tx.amount,
-        },
-        create: {
-          accountId: accountRecord.id,
-          amount: tx.amount,
-          date: new Date(tx.date),
-          text: tx.text,
-          counterparty: tx.counterparty,
-          status: tx.status,
-          categoryId: categoryId,
-          isSubscription: isSubscription,
-          hash: hash,
-        },
-      });
-      createdTransactions.push(txRecord);
-    }
-  }
-
-  // 4. Create Consent Session (180 days from now)
-  const validUntil = new Date();
-  validUntil.setDate(validUntil.getDate() + 179);
-  await prisma.consentSession.upsert({
-    where: { sessionId: mockSession.sessionId },
-    update: { validUntil, status: "active" },
-    create: {
-      aggregator: "enable_banking",
-      bankName: "Nordea",
-      sessionId: mockSession.sessionId,
-      validUntil,
-      status: "active",
-    },
-  });
-
-  // 5. Detect and populate subscriptions
-  const detected = detectSubscriptionsFromTransactions(createdTransactions);
-  await prisma.subscription.deleteMany({});
-  for (const sub of detected) {
-    await prisma.subscription.create({
-      data: {
-        name: sub.name,
-        amount: sub.amount,
-        interval: sub.interval,
-        categoryId: sub.categoryId,
-        lastPaymentDate: sub.lastPaymentDate,
-        nextPaymentDate: sub.nextPaymentDate,
-        status: "active",
-        detectedAuto: true,
-      },
-    });
-  }
-
-  console.log(`Database seeded successfully! Generated ${createdTransactions.length} transactions and ${detected.length} active subscriptions.`);
+  console.log(`✓ Oprettet ${Object.keys(categories).length} standardkategorier og ${rulesData.length} klassificeringsregler.`);
 }
 
 main()

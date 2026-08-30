@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { EnableBankingClient } from "@/lib/enable-banking";
 import { generateTransactionHash, classifyTransaction, detectSubscriptionsFromTransactions } from "@/lib/classifier";
@@ -6,39 +6,28 @@ import { generateTransactionHash, classifyTransaction, detectSubscriptionsFromTr
 export async function POST(req: Request) {
   try {
     const client = new EnableBankingClient();
-    const accounts = await prisma.account.findMany();
 
-    if (accounts.length === 0) {
-      // If no accounts yet, create initial mock/real session
-      const { accounts: fetchedAccounts } = await client.createSession("mock_init");
-      for (const acc of fetchedAccounts) {
-        await prisma.account.upsert({
-          where: { id: acc.accountId },
-          update: {
-            name: acc.name,
-            iban: acc.iban,
-            accountNumber: acc.accountNumber,
-            currency: acc.currency,
-            balance: acc.balance,
-            bookedBalance: acc.bookedBalance,
-            availableBalance: acc.availableBalance,
-          },
-          create: {
-            id: acc.accountId,
-            bankName: "Nordea",
-            name: acc.name,
-            iban: acc.iban,
-            accountNumber: acc.accountNumber,
-            currency: acc.currency,
-            balance: acc.balance,
-            bookedBalance: acc.bookedBalance,
-            availableBalance: acc.availableBalance,
-          },
-        });
-      }
+    if (!client.isConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "Enable Banking er ikke konfigureret endnu. Indtast dit Application ID og Key ID under 'Forbindelse & Regler'.",
+        },
+        { status: 400 }
+      );
     }
 
     const currentAccounts = await prisma.account.findMany();
+    if (currentAccounts.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Ingen bankkonti tilknyttet endnu. Tryk på 'Forbind med Nordea (MitID)' under Indstillinger for at give samtykke.",
+        },
+        { status: 400 }
+      );
+    }
+
     const rules = await prisma.classificationRule.findMany({ include: { category: true } });
     const categories = await prisma.category.findMany();
 
@@ -65,7 +54,7 @@ export async function POST(req: Request) {
           update: {
             status: tx.status,
             amount: tx.amount,
-            // Only update category if user hasn't set one yet
+            // Preserve user category if set
             categoryId: existing?.categoryId ? existing.categoryId : categoryId,
             isSubscription: existing?.isSubscription !== undefined ? existing.isSubscription : isSubscription,
           },

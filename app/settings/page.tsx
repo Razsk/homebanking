@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { 
@@ -12,7 +12,9 @@ import {
   Landmark, 
   CheckCircle2, 
   ExternalLink,
-  Info
+  Copy,
+  Check,
+  AlertCircle
 } from "lucide-react";
 import { SyncButton } from "../components/SyncButton";
 
@@ -20,7 +22,15 @@ export default function SettingsPage() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [rules, setRules] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [credStatus, setCredStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // Credential Form
+  const [appIdInput, setAppIdInput] = useState("");
+  const [keyIdInput, setKeyIdInput] = useState("");
+  const [savingCreds, setSavingCreds] = useState(false);
+  const [credSaved, setCredSaved] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
 
   // New Rule Form State
   const [pattern, setPattern] = useState("");
@@ -33,17 +43,22 @@ export default function SettingsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [analyticsRes, rulesRes] = await Promise.all([
+      const [analyticsRes, rulesRes, credRes] = await Promise.all([
         fetch("/api/analytics"),
         fetch("/api/rules"),
+        fetch("/api/settings/credentials"),
       ]);
 
       const analyticsData = await analyticsRes.json();
       const rulesData = await rulesRes.json();
+      const credData = await credRes.json();
 
       setAnalytics(analyticsData);
       setRules(rulesData.rules || []);
       setCategories(rulesData.categories || []);
+      setCredStatus(credData);
+
+      if (credData.keyId && !keyIdInput) setKeyIdInput(credData.keyId);
       if (rulesData.categories?.length > 0 && !categoryId) {
         setCategoryId(rulesData.categories[0].id);
       }
@@ -58,6 +73,38 @@ export default function SettingsPage() {
     loadData();
   }, []);
 
+  const handleSaveCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSavingCreds(true);
+      const res = await fetch("/api/settings/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appId: appIdInput, keyId: keyIdInput }),
+      });
+      if (res.ok) {
+        setCredSaved(true);
+        setTimeout(() => setCredSaved(false), 3000);
+        loadData();
+      } else {
+        const err = await res.json();
+        alert("Fejl: " + err.error);
+      }
+    } catch (e: any) {
+      alert("Fejl ved gemning: " + e.message);
+    } finally {
+      setSavingCreds(false);
+    }
+  };
+
+  const handleCopyPublicKey = () => {
+    if (credStatus?.publicKey) {
+      navigator.clipboard.writeText(credStatus.publicKey);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 3000);
+    }
+  };
+
   const handleStartAuth = async () => {
     try {
       setConnecting(true);
@@ -70,7 +117,7 @@ export default function SettingsPage() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert("Fejl ved start af godkendelse: " + (data.error || "Ukendt fejl"));
+        alert("Fejl ved start af MitID godkendelse: " + (data.error || "Ukendt fejl"));
       }
     } catch (e: any) {
       alert("Fejl: " + e.message);
@@ -98,7 +145,6 @@ export default function SettingsPage() {
       if (res.ok) {
         setPattern("");
         setIsSubscription(false);
-        // re-run sync/classify
         await fetch("/api/sync", { method: "POST" });
         loadData();
       }
@@ -119,22 +165,113 @@ export default function SettingsPage() {
     }
   };
 
-  const handleReclassifyAll = async () => {
-    try {
-      await fetch("/api/sync", { method: "POST" });
-      alert("Gen-klassificering fuldført!");
-      loadData();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Forbindelse & Klassificeringsregler</h1>
-        <p className="text-sm text-slate-500">Konfigurér din Nordea Open Banking integration og automatiske regler</p>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Forbindelse & Indstillinger</h1>
+        <p className="text-sm text-slate-500">Live PSD2 Open Banking integration med Nordea Danmark</p>
+      </div>
+
+      {/* Enable Banking API Credentials Section */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-6">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Key className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">Enable Banking API Nøgler</h3>
+              <p className="text-xs text-slate-400">Asymmetrisk RS256 nøglepar og Application Credentials</p>
+            </div>
+          </div>
+          <div>
+            {credStatus?.isConfigured ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Konfigureret (Live Klar)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                <AlertCircle className="w-3.5 h-3.5" /> Mangler API nøgler
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Public Key Display */}
+        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-700 uppercase">Din Offentlige RSA Nøgle (public.key)</span>
+            <button
+              onClick={handleCopyPublicKey}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-md shadow-2xs transition-colors"
+            >
+              {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+              <span>{copiedKey ? "Kopieret!" : "Kopiér Nøgle"}</span>
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 mb-2">
+            Upload denne nøgle under din applikation i{" "}
+            <a
+              href="https://enablebanking.com"
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-600 font-semibold inline-flex items-center gap-0.5 hover:underline"
+            >
+              Enable Banking Control Panel <ExternalLink className="w-3 h-3" />
+            </a>{" "}
+            for at modtage et <strong>Key ID</strong>.
+          </p>
+          <pre className="text-[11px] font-mono bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto max-h-32">
+            {credStatus?.publicKey || "Genererer nøgler..."}
+          </pre>
+        </div>
+
+        {/* Credentials Form */}
+        <form onSubmit={handleSaveCredentials} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                Application ID (App ID)
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="f.eks. a1b2c3d4-e5f6-7890-..."
+                value={appIdInput}
+                onChange={(e) => setAppIdInput(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                Key ID (kid)
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="f.eks. key-prod-01"
+                value={keyIdInput}
+                onChange={(e) => setKeyIdInput(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <div className="text-xs text-slate-400">
+              Redirect URL: <code className="text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded font-mono">{credStatus?.redirectUrl || "http://localhost:3000/api/auth/callback"}</code>
+            </div>
+            <button
+              type="submit"
+              disabled={savingCreds}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
+            >
+              {savingCreds ? "Gemmer..." : credSaved ? "Gemt i .env!" : "Gem API Nøgler"}
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Nordea Connection Card */}
@@ -147,23 +284,29 @@ export default function SettingsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-slate-900 text-lg">Nordea Danmark (PSD2 AISP)</h3>
-                <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Forbundet
-                </span>
+                {analytics?.accountsCount > 0 ? (
+                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Forbundet ({analytics.accountsCount} konti)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-500">
+                    Ikke forbundet
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Aggregator: Enable Banking (Asymmetrisk RS256 JWT & MitID SCA)
+                Direkte konto- og transaktionsadgang via MitID godkendelse
               </p>
             </div>
           </div>
 
           <button
             onClick={handleStartAuth}
-            disabled={connecting}
+            disabled={connecting || !credStatus?.isConfigured}
             className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg text-white bg-[#0000a0] hover:bg-[#000088] shadow-sm transition-all active:scale-95 disabled:opacity-50"
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>{connecting ? "Åbner MitID..." : "Forny Samtykke (MitID)"}</span>
+            <span>{connecting ? "Åbner MitID..." : "Forbind med Nordea (MitID)"}</span>
           </button>
         </div>
 
@@ -171,23 +314,28 @@ export default function SettingsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80">
             <span className="text-xs font-medium text-slate-500">Samtykkestatus</span>
-            <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Aktivt (Læseadgang til konti & transaktioner)</span>
+            <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+              {analytics?.consent ? (
+                <span className="text-emerald-600 flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" /> Aktivt
+                </span>
+              ) : (
+                <span className="text-slate-400">Intet aktivt samtykke endnu</span>
+              )}
             </div>
           </div>
 
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80">
             <span className="text-xs font-medium text-slate-500">Gyldighed (180 Dage Regel)</span>
             <p className="mt-1 text-sm font-semibold text-slate-900">
-              {analytics?.consent?.daysRemaining || 180} dage tilbage
+              {analytics?.consent ? `${analytics.consent.daysRemaining} dage tilbage` : "0 dage"}
             </p>
           </div>
 
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80">
             <span className="text-xs font-medium text-slate-500">Tilknyttede Konti</span>
             <p className="mt-1 text-sm font-semibold text-slate-900">
-              {analytics?.accountsCount || 3} konti godkendt
+              {analytics?.accountsCount || 0} konti godkendt
             </p>
           </div>
         </div>
@@ -200,13 +348,6 @@ export default function SettingsPage() {
             <h3 className="font-bold text-slate-900 text-lg">Klassificeringsregler</h3>
             <p className="text-xs text-slate-500">Regler eksekveres i prioriteret rækkefølge mod posteringstekst</p>
           </div>
-          <button
-            onClick={handleReclassifyAll}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Gen-klassificér alle poster</span>
-          </button>
         </div>
 
         {/* Add New Rule Form */}
