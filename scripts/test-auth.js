@@ -42,19 +42,44 @@ const body = JSON.stringify({
   state: 'test_state',
 });
 
-fetch('https://api.enablebanking.com/auth', {
-  method: 'POST',
+fetch("https://api.enablebanking.com/accounts/9da0a936-7d64-4d93-9ce9-4e6dee0ac0d3", {
+  method: "GET",
   headers: {
-    Authorization: 'Bearer ' + token,
-    'Content-Type': 'application/json',
+    Authorization: "Bearer " + token,
+    "Content-Type": "application/json",
   },
-  body: body,
 })
   .then(async (res) => {
-    console.log('HTTP Status:', res.status);
+    console.log("Account HTTP Status:", res.status);
     const text = await res.text();
-    console.log('Response body:', text);
+    console.log("Account response:", text);
   })
   .catch((err) => {
-    console.error('Fetch error:', err);
+    console.error("Fetch error:", err);
+  });
+
+fetch("https://api.enablebanking.com/accounts/9da0a936-7d64-4d93-9ce9-4e6dee0ac0d3/balances", {
+  method: "GET",
+  headers: {
+    Authorization: "Bearer " + token,
+    "Content-Type": "application/json",
+  },
+})
+  .then(async (res) => {
+    console.log("Balances HTTP Status:", res.status);
+    const text = await res.text();
+    console.log("Balances response:", text);
+  });
+
+fetch("https://api.enablebanking.com/accounts/9da0a936-7d64-4d93-9ce9-4e6dee0ac0d3/transactions", {
+  method: "GET",
+  headers: {
+    Authorization: "Bearer " + token,
+    "Content-Type": "application/json",
+  },
+})
+  .then(async (res) => {
+    console.log("Transactions HTTP Status:", res.status);
+    const text = await res.text();
+    console.log("Transactions response:", text);
   });

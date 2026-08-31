@@ -165,39 +165,61 @@ export class EnableBankingClient {
     const data = await response.json();
 
     const accounts: BankAccountData[] = [];
-    for (const acc of data.accounts || []) {
-      const accId = acc.account_id?.iban || acc.uid || acc.account_id || acc.iban;
+    const rawAccounts = data.accounts || [];
+
+    for (const acc of rawAccounts) {
+      // Enable Banking account UID is always a UUID string (or in acc.uid / acc object)
+      const accUid = typeof acc === "string" ? acc : acc.uid || acc.id || acc.account_uid || acc.account_id;
+      if (!accUid || typeof accUid !== "string") continue;
+
+      let accountInfo: any = {};
+      try {
+        const accRes = await fetch(`${this.baseUrl}/accounts/${encodeURIComponent(accUid)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (accRes.ok) {
+          accountInfo = await accRes.json();
+        }
+      } catch (e) {
+        console.warn("Kunne ikke hente kontoinfo for", accUid, e);
+      }
+
       let balance = 0;
       let bookedBalance = 0;
       let availableBalance = 0;
 
       // Fetch live balances
       try {
-        const balRes = await fetch(`${this.baseUrl}/accounts/${encodeURIComponent(accId)}/balances`, {
+        const balRes = await fetch(`${this.baseUrl}/accounts/${encodeURIComponent(accUid)}/balances`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (balRes.ok) {
           const balData = await balRes.json();
           for (const b of balData.balances || []) {
             const val = parseFloat(b.balance_amount?.amount || b.amount || "0");
-            if (b.balance_type === "closingBooked" || b.balance_type === "interimBooked") {
+            if (b.balance_type === "closingBooked" || b.balance_type === "interimBooked" || b.balance_type === "expected") {
               bookedBalance = val;
               balance = val;
-            } else if (b.balance_type === "interimAvailable" || b.balance_type === "expected") {
+            } else if (b.balance_type === "interimAvailable" || b.balance_type === "openingAvailable") {
               availableBalance = val;
             }
           }
         }
       } catch (e) {
-        console.warn("Kunne ikke hente saldi for konto", accId, e);
+        console.warn("Kunne ikke hente saldi for konto", accUid, e);
       }
 
+      const iban = accountInfo.account_id?.iban || (typeof acc === "object" ? acc.account_id?.iban || acc.iban : null);
+      const accountNumber = accountInfo.account_id?.other?.identification || (typeof acc === "object" ? acc.account_id?.other?.identification || acc.account_number : null);
+      const name = accountInfo.holder_name || accountInfo.name || accountInfo.account_id?.name || (typeof acc === "object" ? acc.name : null) || (iban ? `Nordea (${iban.slice(-4)})` : "Nordea Konto");
+      const currency = accountInfo.currency || (typeof acc === "object" ? acc.currency : null) || "DKK";
+
       accounts.push({
-        accountId: accId,
-        iban: acc.account_id?.iban || acc.iban,
-        accountNumber: acc.account_id?.other?.identification || acc.account_number,
-        name: acc.account_id?.name || acc.name || "Nordea Konto",
-        currency: acc.currency || "DKK",
+        accountId: accUid,
+        iban: iban || null,
+        accountNumber: accountNumber || null,
+        name: name,
+        currency: currency,
         balance: balance,
         bookedBalance: bookedBalance,
         availableBalance: availableBalance || balance,
@@ -229,14 +251,39 @@ export class EnableBankingClient {
     }
 
     const data = await response.json();
-    return (data.transactions || []).map((tx: any) => ({
-      transactionId: tx.entry_reference || tx.transaction_id,
-      amount: parseFloat(tx.transaction_amount?.amount || tx.amount || "0"),
-      date: tx.booking_date || tx.value_date || new Date().toISOString().split("T")[0],
-      valueDate: tx.value_date,
-      text: tx.remittance_information_unstructured || tx.creditor_name || tx.debtor_name || "Postering",
-      counterparty: tx.creditor_name || tx.debtor_name,
-      status: tx.status === "pending" ? "pending" : "booked",
-    }));
+    return (data.transactions || []).map((tx: any) => {
+      let amount = parseFloat(tx.transaction_amount?.amount || tx.amount || "0");
+      // DBIT indicator means money went out (expense / negative)
+      if (tx.credit_debit_indicator === "DBIT" && amount > 0) {
+        amount = -amount;
+      }
+
+      let text = "";
+      if (Array.isArray(tx.remittance_information) && tx.remittance_information.length > 0) {
+        text = tx.remittance_information.join(" ").replace(/\n+/g, " ").trim();
+      } else if (tx.remittance_information_unstructured) {
+        text = tx.remittance_information_unstructured.trim();
+      } else if (tx.creditor?.name) {
+        text = tx.creditor.name.trim();
+      } else if (tx.debtor?.name) {
+        text = tx.debtor.name.trim();
+      } else if (tx.bank_transaction_code?.description) {
+        text = tx.bank_transaction_code.description.trim();
+      } else {
+        text = "Postering";
+      }
+
+      const counterparty = tx.creditor?.name || tx.debtor?.name || null;
+
+      return {
+        transactionId: tx.entry_reference || tx.transaction_id || `tx_${Math.random()}`,
+        amount,
+        date: tx.booking_date || tx.value_date || tx.transaction_date || new Date().toISOString().split("T")[0],
+        valueDate: tx.value_date || null,
+        text,
+        counterparty,
+        status: tx.status === "BOOK" || tx.status === "booked" ? "booked" : "pending",
+      };
+    });
   }
 }
