@@ -262,7 +262,10 @@ export function detectSubscriptionsFromTransactions(
       daysToAdd = 7;
     }
 
-    if (intervalType && isAmountConsistent) {
+    const minRequiredOccurrences = intervalType === "yearly" ? 2 : 3;
+    const hasEnoughOccurrences = txList.length >= minRequiredOccurrences;
+
+    if (intervalType && isAmountConsistent && hasEnoughOccurrences) {
       const lastTx = txList[txList.length - 1];
       const nextDate = new Date(lastTx.dateObj);
       nextDate.setDate(nextDate.getDate() + daysToAdd);
