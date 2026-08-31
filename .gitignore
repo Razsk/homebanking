@@ -26,8 +26,12 @@ dev.db-shm
 .env
 .env*.local
 *.key
+*.crt
+*.cer
+*.pem
 private.key
 public.key
+public.crt
 
 # Debug
 npm-debug.log*
