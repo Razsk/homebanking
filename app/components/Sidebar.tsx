@@ -63,16 +63,26 @@ export function Sidebar() {
         </nav>
       </div>
 
-      {/* Footer / Sync info */}
-      <div className="p-4 m-3 rounded-xl bg-slate-800/40 border border-slate-800">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            PSD2 Aktiv (180d)
+      {/* Footer / Sync info & Legal Links */}
+      <div className="p-3 m-3 space-y-3">
+        <div className="p-3.5 rounded-xl bg-slate-800/40 border border-slate-800">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              PSD2 Aktiv (180d)
+            </div>
+            <ShieldCheck className="w-4 h-4 text-slate-400" />
           </div>
-          <ShieldCheck className="w-4 h-4 text-slate-400" />
+          <SyncButton />
         </div>
-        <SyncButton />
+
+        <div className="flex items-center justify-center gap-3 text-[11px] text-slate-500 font-medium pt-1">
+          <Link href="/privacy" className="hover:text-slate-300 transition-colors">Privatliv</Link>
+          <span>•</span>
+          <Link href="/terms" className="hover:text-slate-300 transition-colors">Vilkår</Link>
+          <span>•</span>
+          <Link href="/about" className="hover:text-slate-300 transition-colors">Om & Kontakt</Link>
+        </div>
       </div>
     </aside>
   );
