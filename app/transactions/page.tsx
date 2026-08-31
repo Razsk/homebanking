@@ -644,7 +644,6 @@ function TransactionsContent() {
           </div>
         </div>
       )}
-      </div>
 
       {/* Rule Creation Modal */}
       {ruleModalOpen && (
