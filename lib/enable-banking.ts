@@ -113,7 +113,8 @@ export class EnableBankingClient {
     }
 
     const token = this.generateToken();
-    const validUntil = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString();
+    // Nordea / ASPSP supports at most 180 days (15552000s). We use 179 days to guarantee it stays strictly within the boundary.
+    const validUntil = new Date(Date.now() + 179 * 24 * 60 * 60 * 1000).toISOString();
 
     const response = await fetch(`${this.baseUrl}/auth`, {
       method: "POST",
