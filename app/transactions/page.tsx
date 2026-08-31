@@ -232,6 +232,22 @@ function TransactionsContent() {
     }
   };
 
+  // Account color palette for color-coded icons
+  const ACCOUNT_COLORS = [
+    { bg: "bg-blue-100 text-blue-700 border-blue-200 ring-blue-500", dot: "bg-blue-600" },
+    { bg: "bg-emerald-100 text-emerald-700 border-emerald-200 ring-emerald-500", dot: "bg-emerald-600" },
+    { bg: "bg-purple-100 text-purple-700 border-purple-200 ring-purple-500", dot: "bg-purple-600" },
+    { bg: "bg-amber-100 text-amber-700 border-amber-200 ring-amber-500", dot: "bg-amber-600" },
+    { bg: "bg-rose-100 text-rose-700 border-rose-200 ring-rose-500", dot: "bg-rose-600" },
+  ];
+
+  const getAccountColor = (accountId?: string | null) => {
+    if (!accountId) return ACCOUNT_COLORS[0];
+    const idx = accounts.findIndex((a) => a.id === accountId);
+    if (idx === -1) return ACCOUNT_COLORS[0];
+    return ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
+  };
+
   const formatDKK = (amount: number | string | undefined | null) => {
     const num = typeof amount === "number" ? amount : parseFloat(String(amount || 0));
     if (isNaN(num)) return "0,00 kr.";
@@ -306,6 +322,7 @@ function TransactionsContent() {
           {accounts.map((acc) => {
             const isSelected = selectedAccount === acc.id;
             const txCount = acc._count?.transactions ?? 0;
+            const accColor = getAccountColor(acc.id);
 
             return (
               <button
@@ -321,7 +338,7 @@ function TransactionsContent() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                      isSelected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
+                      isSelected ? "bg-blue-600 text-white" : `${accColor.bg} ${accColor.text}`
                     }`}>
                       <CreditCard className="w-4 h-4" />
                     </div>
@@ -462,7 +479,7 @@ function TransactionsContent() {
                   <th className="py-3 px-4">Beskrivelse / Modpart</th>
                   <th className="py-3 px-4 text-right">Beløb</th>
                   <th className="py-3 px-4">Hurtig Kategori</th>
-                  <th className="py-3 px-4">Konto</th>
+                  <th className="py-3 px-2 text-center w-12" title="Bankkonto">Konto</th>
                   <th className="py-3 px-4 text-center">Fast</th>
                   <th className="py-3 px-4 text-right">Regel</th>
                 </tr>
@@ -547,10 +564,32 @@ function TransactionsContent() {
                         </div>
                       </td>
 
-                      <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-500">
-                        <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-medium">
-                          {tx.account?.customName || tx.account?.name || "Konto"}
-                        </span>
+                      {/* Simple Color-Coded Account Icon */}
+                      <td className="py-3.5 px-2 text-center whitespace-nowrap">
+                        {(() => {
+                          const accColor = getAccountColor(tx.accountId);
+                          const accName = tx.account?.customName || tx.account?.name || "Konto";
+                          const shortAcc = tx.account?.accountNumber ? `(••••${tx.account.accountNumber.slice(-4)})` : "";
+                          return (
+                            <div className="inline-flex items-center justify-center group relative">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAccount(selectedAccount === tx.accountId ? "" : (tx.accountId || ""))}
+                                className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center ${accColor.bg} ${accColor.text} border border-black/10 shadow-2xs hover:scale-110 active:scale-95 transition-all cursor-pointer`}
+                                title={`Filtrér efter ${accName} ${shortAcc}`}
+                              >
+                                <CreditCard className="w-3.5 h-3.5" />
+                              </button>
+                              {/* Hover Tooltip */}
+                              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-30">
+                                <div className="bg-slate-900 text-white text-[11px] font-semibold py-1 px-2 rounded-lg shadow-lg whitespace-nowrap">
+                                  {accName} {shortAcc}
+                                </div>
+                                <div className="w-1.5 h-1.5 bg-slate-900 rotate-45 -mt-0.5" />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
