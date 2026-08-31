@@ -89,42 +89,100 @@ export interface DetectedSubscription {
   occurrences: number;
 }
 
-export function cleanMerchantName(raw: string): string {
-  const cleaned = (raw || "")
-    .replace(/dankort[- ]nota\s+/gi, "")
-    .replace(/visa køb (dkk|eur|usd|sek|nok)\s+[\d\.,]+/gi, "")
-    .replace(/visa køb\s+/gi, "")
-    .replace(/bs [bb]etaling\s+/gi, "")
-    .replace(/(dkk|eur|usd|sek|nok)\s+[\d\.,]+/gi, "")
-    .replace(/den \d\d\.\d\d/gi, "")
-    .replace(/[\d]{3,}/g, "") // strip receipt/terminal numbers
-    .replace(/[\*\_\#]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return (
-    cleaned
-      .split(" ")
-      .filter((w) => w.length > 0)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(" ") || raw
-  );
-}
-
 export function cleanMerchantKey(raw: string): string {
-  return (raw || "")
-    .toLowerCase()
+  let s = (raw || "").toLowerCase();
+
+  // Strip standard prefixes
+  s = s
     .replace(/dankort[- ]nota\s+/gi, "")
     .replace(/visa køb (dkk|eur|usd|sek|nok)\s+[\d\.,]+/gi, "")
     .replace(/visa køb\s+/gi, "")
     .replace(/bs [bb]etaling\s+/gi, "")
+    .replace(/wl\s*\*\s*/gi, "")
+    .replace(/paypal\s*\*\s*/gi, "")
     .replace(/(dkk|eur|usd|sek|nok)\s+[\d\.,]+/gi, "")
     .replace(/den \d\d\.\d\d/gi, "")
     .replace(/[\d]{3,}/g, "")
-    .replace(/[\d\.\-\/]/g, "")
-    .replace(/\s+(a\/s|aps|se|ab|ltd|com|dk|holding)$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/[\*\_\#\/\-\.]/g, " ");
+
+  const cities = [
+    "london",
+    "buchare",
+    "stockholm",
+    "koebenha",
+    "kobenhavn",
+    "copenhagen",
+    "dublin",
+    "amsterdam",
+    "paris",
+    "berlin",
+    "soborg",
+    "gladsaxe",
+    "lyngby",
+    "denmark",
+    "usa",
+    "holding",
+    "aps",
+    "as",
+    "ltd",
+    "ab",
+    "se",
+    "dk",
+  ];
+
+  let words = s.split(/\s+/).filter((w) => w.length > 0);
+  // Remove duplicate adjacent words e.g. 'google google one' -> 'google one'
+  words = words.filter((w, i) => i === 0 || w !== words[i - 1]);
+  // Remove noise/city words at the end
+  while (words.length > 1 && cities.includes(words[words.length - 1])) {
+    words.pop();
+  }
+
+  let cleaned = words.join(" ").trim();
+  if (cleaned.startsWith("google google ")) cleaned = cleaned.replace("google google ", "google ");
+  if (cleaned.startsWith("youtube memb")) cleaned = "youtube membership";
+  if (cleaned.startsWith("google youtube memb")) cleaned = "google youtube membership";
+  if (
+    cleaned.startsWith("google youtube premi") ||
+    cleaned.startsWith("google youtubepremi") ||
+    cleaned.startsWith("youtube premi") ||
+    cleaned.startsWith("youtubepremi")
+  ) {
+    cleaned = "google youtube premium";
+  }
+  if (cleaned === "google google one" || cleaned === "google one") cleaned = "google one";
+
+  return cleaned;
+}
+
+export function cleanMerchantName(raw: string): string {
+  const key = cleanMerchantKey(raw);
+  const map: { [k: string]: string } = {
+    "google one": "Google One",
+    "google youtube premium": "YouTube Premium",
+    "google youtube membership": "YouTube Membership",
+    disneyplus: "Disney+",
+    "apple com bill": "Apple Services",
+    applecombill: "Apple Services",
+    boosteroid: "Boosteroid",
+    "gladsaxe karat": "Gladsaxe Karat",
+    synoptik: "Synoptik A/S",
+    "den lille skole": "Den Lille Skole",
+    "next forsikring": "Next Forsikring",
+    "nordea kredit real": "Nordea Kredit - Real",
+    "bgs lån af rasmines bil": "Bgs Lån Af Rasmines Bil",
+    mofibo: "Mofibo",
+    patreon: "Patreon",
+  };
+
+  if (map[key]) return map[key];
+
+  return (
+    key
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ") || raw
+  );
 }
 
 export function detectSubscriptionsFromTransactions(
