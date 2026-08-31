@@ -23,13 +23,15 @@ def build_dist():
     public_dir = os.path.abspath("public")
     if os.path.exists(public_dir):
         for item in os.listdir(public_dir):
+            if item == "screenshots":
+                continue
             s = os.path.join(public_dir, item)
             d = os.path.join(dist_dir, item)
             if os.path.isdir(s):
                 shutil.copytree(s, d)
             else:
                 shutil.copy2(s, d)
-        print(f"Copied public assets -> {dist_dir}")
+        print(f"Copied public assets (excluding screenshots) -> {dist_dir}")
 
     print("=== 3. Generating rich standalone static compliance pages ===")
 
