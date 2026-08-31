@@ -36,6 +36,12 @@ function TransactionsContent() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<string>("100");
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   // Sync if URL search param changes
   useEffect(() => {
     const accId = searchParams.get("accountId");
@@ -58,6 +64,8 @@ function TransactionsContent() {
       if (selectedAccount) params.set("accountId", selectedAccount);
       if (selectedCategory) params.set("categoryId", selectedCategory);
       if (onlySubscriptions) params.set("isSubscription", "true");
+      params.set("page", String(currentPage));
+      params.set("limit", pageSize);
 
       const [txRes, accRes] = await Promise.all([
         fetch(`/api/transactions?${params.toString()}`),
@@ -70,6 +78,8 @@ function TransactionsContent() {
       setTransactions(txData.transactions || []);
       setCategories(txData.categories || []);
       setAccounts(Array.isArray(accData) ? accData : []);
+      setTotalCount(txData.totalCount ?? (txData.transactions?.length || 0));
+      setTotalPages(txData.totalPages ?? 1);
       // Clear selections on data refresh/filter changes
       setSelectedIds(new Set());
     } catch (e) {
@@ -79,9 +89,14 @@ function TransactionsContent() {
     }
   };
 
+  // Reset to page 1 on filter/search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedAccount, selectedCategory, onlySubscriptions, pageSize]);
+
   useEffect(() => {
     loadData();
-  }, [search, selectedAccount, selectedCategory, onlySubscriptions]);
+  }, [search, selectedAccount, selectedCategory, onlySubscriptions, pageSize, currentPage]);
 
   // Multi-select handlers
   const isAllSelected = transactions.length > 0 && selectedIds.size === transactions.length;
@@ -429,16 +444,33 @@ function TransactionsContent() {
 
       {/* Transactions Table */}
       <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div className="flex flex-wrap items-center justify-between pb-4 border-b border-slate-100 gap-3">
           <div>
             <h3 className="font-bold text-slate-900 text-base">
-              Posteringer ({transactions.length})
+              Posteringer ({totalCount})
             </h3>
             <p className="text-xs text-slate-400">
               {selectedAccount 
                 ? `Viser kun poster for: ${accounts.find(a => a.id === selectedAccount)?.customName || accounts.find(a => a.id === selectedAccount)?.name || "Valgt konto"}`
                 : "Viser posteringer på tværs af alle dine Nordea konti"}
             </p>
+          </div>
+
+          {/* Quick Page Size Selector in Header */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Vis:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(e.target.value)}
+              className="px-2.5 py-1 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="50">50 poster</option>
+              <option value="100">100 poster (Standard)</option>
+              <option value="250">250 poster</option>
+              <option value="500">500 poster</option>
+              <option value="1000">1.000 poster</option>
+              <option value="0">Alle poster (Vis alt)</option>
+            </select>
           </div>
         </div>
 
@@ -620,6 +652,74 @@ function TransactionsContent() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Footer Bar */}
+        {!loading && totalCount > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-500">
+            <div>
+              {pageSize === "0" || pageSize === "all" ? (
+                <span>Viser alle <strong>{totalCount}</strong> posteringer</span>
+              ) : (
+                <span>
+                  Viser post <strong>{Math.min((currentPage - 1) * parseInt(pageSize) + 1, totalCount)}</strong> -{" "}
+                  <strong>{Math.min(currentPage * parseInt(pageSize), totalCount)}</strong> ud af{" "}
+                  <strong>{totalCount}</strong> posteringer
+                </span>
+              )}
+            </div>
+
+            {/* Pagination buttons */}
+            {(pageSize !== "0" && pageSize !== "all" && totalPages > 1) && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-slate-700 transition-colors"
+                >
+                  ← Forrige
+                </button>
+
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1 mx-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum = i + 1;
+                    if (totalPages > 5 && currentPage > 3) {
+                      pageNum = Math.min(currentPage - 2 + i, totalPages - (4 - i));
+                    }
+                    const isActive = pageNum === currentPage;
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-7 h-7 rounded-lg font-bold text-xs transition-colors ${
+                          isActive
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  {totalPages > 5 && currentPage < totalPages - 2 && (
+                    <span className="text-slate-400 px-1 font-mono">...</span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-slate-700 transition-colors"
+                >
+                  Næste →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

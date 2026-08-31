@@ -8,7 +8,12 @@ export async function GET(req: Request) {
     const categoryId = searchParams.get("categoryId");
     const search = searchParams.get("search");
     const isSubscription = searchParams.get("isSubscription");
-    const limit = parseInt(searchParams.get("limit") || "100", 10);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limitParam = searchParams.get("limit");
+    
+    // limit 0 or "all" means return everything without limit
+    const isUnlimited = limitParam === "0" || limitParam === "all";
+    const limit = isUnlimited ? 0 : parseInt(limitParam || "100", 10);
 
     const where: any = {};
     if (accountId) where.accountId = accountId;
@@ -21,19 +26,35 @@ export async function GET(req: Request) {
       ];
     }
 
-    const transactions = await prisma.transaction.findMany({
+    const totalCount = await prisma.transaction.count({ where });
+
+    const findOptions: any = {
       where,
       include: {
         account: true,
         category: true,
       },
       orderBy: { date: "desc" },
-      take: limit,
-    });
+    };
 
+    if (limit > 0) {
+      findOptions.take = limit;
+      findOptions.skip = (page - 1) * limit;
+    }
+
+    const transactions = await prisma.transaction.findMany(findOptions);
     const categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
 
-    return NextResponse.json({ transactions, categories });
+    const totalPages = limit > 0 ? Math.max(1, Math.ceil(totalCount / limit)) : 1;
+
+    return NextResponse.json({
+      transactions,
+      categories,
+      totalCount,
+      page,
+      limit,
+      totalPages,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
