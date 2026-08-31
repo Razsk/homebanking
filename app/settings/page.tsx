@@ -39,6 +39,7 @@ export default function SettingsPage() {
     subDaysThreshold: "5",
     subAmountVariance: "15",
     consentAlertDays: "14",
+    syncHistoryDays: "180",
   });
 
   // Credential inputs
@@ -1152,6 +1153,26 @@ export default function SettingsPage() {
                 <option value="Nykredit">Nykredit</option>
                 <option value="Sydbank">Sydbank</option>
                 <option value="Arbejdernes Landsbank">Arbejdernes Landsbank</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                Standard Synkroniseringshistorik
+              </label>
+              <p className="text-xs text-slate-400 mb-2">
+                Hvor lang en historik der hentes ved et standard klik på synkronisér-knappen.
+              </p>
+              <select
+                value={preferences.syncHistoryDays || "180"}
+                onChange={(e) => setPreferences({ ...preferences, syncHistoryDays: e.target.value })}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="30">Seneste 30 dage (Hurtig)</option>
+                <option value="90">Seneste 90 dage (3 måneder - Standard)</option>
+                <option value="180">Seneste 180 dage (6 måneder)</option>
+                <option value="365">Seneste 1 år (12 måneder)</option>
+                <option value="535">Maksimal historik (540 dage / 18 måneder - Nordea Maksimum)</option>
               </select>
             </div>
           </div>

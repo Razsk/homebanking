@@ -5,6 +5,7 @@ import { generateTransactionHash, classifyTransaction, detectSubscriptionsFromTr
 
 export async function POST(req: Request) {
   try {
+    const body = await req.json().catch(() => ({}));
     const client = new EnableBankingClient();
 
     if (!client.isConfigured()) {
@@ -28,13 +29,22 @@ export async function POST(req: Request) {
       );
     }
 
+    // Determine history date
+    let effectiveDateFrom: string | undefined = body.dateFrom;
+    if (!effectiveDateFrom) {
+      const pref = await prisma.userPreference.findUnique({ where: { key: "syncHistoryDays" } });
+      const days = parseInt(body.historyDays || pref?.value || "180", 10);
+      const d = new Date(Date.now() - Math.min(days, 535) * 24 * 60 * 60 * 1000);
+      effectiveDateFrom = d.toISOString().split("T")[0];
+    }
+
     const rules = await prisma.classificationRule.findMany({ include: { category: true } });
     const categories = await prisma.category.findMany();
 
     let totalSynced = 0;
 
     for (const acc of currentAccounts) {
-      const bankTxs = await client.fetchTransactions(acc.id);
+      const bankTxs = await client.fetchTransactions(acc.id, effectiveDateFrom);
 
       for (const tx of bankTxs) {
         const hash = generateTransactionHash(acc.id, tx.date, tx.amount, tx.text);

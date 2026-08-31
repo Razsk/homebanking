@@ -42,7 +42,8 @@ const body = JSON.stringify({
   state: 'test_state',
 });
 
-fetch("https://api.enablebanking.com/accounts/9da0a936-7d64-4d93-9ce9-4e6dee0ac0d3", {
+const date365 = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+fetch("https://api.enablebanking.com/accounts/9da0a936-7d64-4d93-9ce9-4e6dee0ac0d3/transactions?date_from=" + date365, {
   method: "GET",
   headers: {
     Authorization: "Bearer " + token,
@@ -50,36 +51,10 @@ fetch("https://api.enablebanking.com/accounts/9da0a936-7d64-4d93-9ce9-4e6dee0ac0
   },
 })
   .then(async (res) => {
-    console.log("Account HTTP Status:", res.status);
+    console.log("Historical Transactions HTTP Status:", res.status);
     const text = await res.text();
-    console.log("Account response:", text);
+    console.log("Response text:", text);
   })
   .catch((err) => {
     console.error("Fetch error:", err);
-  });
-
-fetch("https://api.enablebanking.com/accounts/9da0a936-7d64-4d93-9ce9-4e6dee0ac0d3/balances", {
-  method: "GET",
-  headers: {
-    Authorization: "Bearer " + token,
-    "Content-Type": "application/json",
-  },
-})
-  .then(async (res) => {
-    console.log("Balances HTTP Status:", res.status);
-    const text = await res.text();
-    console.log("Balances response:", text);
-  });
-
-fetch("https://api.enablebanking.com/accounts/9da0a936-7d64-4d93-9ce9-4e6dee0ac0d3/transactions", {
-  method: "GET",
-  headers: {
-    Authorization: "Bearer " + token,
-    "Content-Type": "application/json",
-  },
-})
-  .then(async (res) => {
-    console.log("Transactions HTTP Status:", res.status);
-    const text = await res.text();
-    console.log("Transactions response:", text);
   });

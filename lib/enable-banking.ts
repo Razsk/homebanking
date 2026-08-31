@@ -238,20 +238,55 @@ export class EnableBankingClient {
     }
 
     const token = this.generateToken();
-    const query = dateFrom ? `?date_from=${dateFrom}` : "";
-    const response = await fetch(`${this.baseUrl}/accounts/${encodeURIComponent(accountId)}/transactions${query}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
 
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Enable Banking /transactions fejl (${response.status}): ${err}`);
+    // Clamp dateFrom so it doesn't exceed 540 days in the past (ASPSP Nordea maximum)
+    let effectiveDateFrom = dateFrom;
+    if (effectiveDateFrom) {
+      const minDate = new Date(Date.now() - 535 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      if (effectiveDateFrom < minDate) {
+        effectiveDateFrom = minDate;
+      }
     }
 
-    const data = await response.json();
-    return (data.transactions || []).map((tx: any) => {
+    const allRawTransactions: any[] = [];
+    let continuationKey: string | null = null;
+    let pageCount = 0;
+    const maxPages = 20; // Safety cap (up to ~2000 transactions per account)
+
+    do {
+      pageCount++;
+      let url = `${this.baseUrl}/accounts/${encodeURIComponent(accountId)}/transactions`;
+      const params = new URLSearchParams();
+      if (effectiveDateFrom) {
+        params.set("date_from", effectiveDateFrom);
+      }
+      if (continuationKey) {
+        params.set("continuation_key", continuationKey);
+      }
+
+      const queryString = params.toString();
+      if (queryString) url += `?${queryString}`;
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Enable Banking /transactions fejl (${response.status}): ${err}`);
+      }
+
+      const data = await response.json();
+      if (Array.isArray(data.transactions)) {
+        allRawTransactions.push(...data.transactions);
+      }
+
+      continuationKey = data.continuation_key || null;
+    } while (continuationKey && pageCount < maxPages);
+
+    return allRawTransactions.map((tx: any) => {
       let amount = parseFloat(tx.transaction_amount?.amount || tx.amount || "0");
       // DBIT indicator means money went out (expense / negative)
       if (tx.credit_debit_indicator === "DBIT" && amount > 0) {
