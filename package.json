@@ -13,6 +13,7 @@
     "reset-data": "node scripts/reset-data.js",
     "build:dist": "python scripts/build_dist.py",
     "deploy:public": "python scripts/deploy_dist.py",
+    "mcp:dev-server": "node scripts/mcp-dev-server.js",
     "clean": "node -e \"const fs = require('fs'); if (fs.existsSync('.next')) fs.rmSync('.next', { recursive: true, force: true }); console.log('.next cache cleared!');\""
   },
   "dependencies": {

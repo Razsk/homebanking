@@ -1,5 +1,6 @@
-﻿import "./globals.css";
+import "./globals.css";
 import { Sidebar } from "./components/Sidebar";
+import { DevErrorBoundary } from "./components/DevErrorBoundary";
 
 export const metadata = {
   title: "Nordea Open Banking & Finansiel Oversigt",
@@ -14,11 +15,14 @@ export default function RootLayout({
   return (
     <html lang="da">
       <body className="bg-slate-50 text-slate-900 flex min-h-screen">
-        <Sidebar />
-        <main className="flex-1 min-w-0 p-8 overflow-y-auto max-w-7xl mx-auto">
-          {children}
-        </main>
+        <DevErrorBoundary>
+          <Sidebar />
+          <main className="flex-1 min-w-0 p-8 overflow-y-auto max-w-7xl mx-auto">
+            {children}
+          </main>
+        </DevErrorBoundary>
       </body>
     </html>
   );
 }
+

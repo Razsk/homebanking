@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "errors": [
+    {
+      "id": "err_1788204842073_l1d6c",
+      "fingerprint": "cec39b5fbed139ce",
+      "name": "TypeError",
+      "message": "Cannot read properties of undefined",
+      "normalizedMessage": "Cannot read properties of undefined",
+      "source": "api",
+      "route": "/api/sync",
+      "status": "unresolved",
+      "occurrenceCount": 1,
+      "firstSeenAt": "2026-08-31T19:34:02.073Z",
+      "lastSeenAt": "2026-08-31T19:34:02.073Z",
+      "fixAttempts": 0
+    }
+  ]
+}
