@@ -14,7 +14,9 @@ import {
   PlaySquare,
   Sparkles,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  TrendingUp,
+  TrendingDown
 } from "lucide-react";
 import { SyncButton } from "../components/SyncButton";
 
@@ -22,6 +24,8 @@ export default function SubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [yearlyTotal, setYearlyTotal] = useState(0);
+  const [priceIncreaseCount, setPriceIncreaseCount] = useState(0);
+  const [priceDecreaseCount, setPriceDecreaseCount] = useState(0);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,6 +33,7 @@ export default function SubscriptionsPage() {
   const [sortBy, setSortBy] = useState<"category" | "yearlyDesc" | "yearlyAsc" | "dueDateAsc" | "dueDateDesc" | "nameAsc">("yearlyDesc");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [priceFilter, setPriceFilter] = useState<"all" | "increase" | "decrease">("all");
 
   // Add Subscription Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -52,6 +57,8 @@ export default function SubscriptionsPage() {
       setSubscriptions(Array.isArray(subData.subscriptions) ? subData.subscriptions : []);
       setMonthlyTotal(subData.monthlyTotal || 0);
       setYearlyTotal(subData.yearlyTotal || 0);
+      setPriceIncreaseCount(subData.priceIncreaseCount || 0);
+      setPriceDecreaseCount(subData.priceDecreaseCount || 0);
       setCategories(Array.isArray(catData) ? catData : []);
     } catch (e) {
       console.error(e);
@@ -180,6 +187,12 @@ export default function SubscriptionsPage() {
       if (categoryFilter && sub.categoryId !== categoryFilter) {
         return false;
       }
+      if (priceFilter === "increase" && !sub.priceChange?.isIncrease) {
+        return false;
+      }
+      if (priceFilter === "decrease" && (!sub.priceChange?.hasChanged || sub.priceChange?.isIncrease)) {
+        return false;
+      }
       return true;
     })
     .sort((a, b) => {
@@ -231,7 +244,7 @@ export default function SubscriptionsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-slate-500">Månedlig Abonnementsudgift</span>
@@ -267,7 +280,31 @@ export default function SubscriptionsPage() {
           </div>
           <div className="mt-4">
             <h2 className="text-2xl font-bold text-slate-900">{subscriptions.filter((s) => s.status === "active").length} stk</h2>
-            <p className="text-xs text-slate-400 mt-1">{subscriptions.filter((s) => s.detectedAuto).length} fundet automatisk af algoritmen</p>
+            <p className="text-xs text-slate-400 mt-1">{subscriptions.filter((s) => s.detectedAuto).length} fundet automatisk</p>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setPriceFilter(priceFilter === "increase" ? "all" : "increase")}
+          className={`p-5 bg-white rounded-2xl border shadow-sm cursor-pointer transition-all ${
+            priceFilter === "increase" ? "border-rose-400 ring-2 ring-rose-200 bg-rose-50/20" : "border-slate-200/80 hover:border-rose-300"
+          }`}
+          title="Klik for at filtrere efter abonnementer med prisstigninger"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-500">Prisændringer</span>
+            <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-2xl font-bold text-rose-600">+{priceIncreaseCount}</h2>
+              <span className="text-xs font-semibold text-slate-400">stigninger / {priceDecreaseCount} fald</span>
+            </div>
+            <p className="text-xs text-rose-500 font-medium mt-1">
+              {priceFilter === "increase" ? "Viser kun stigninger (aktiv)" : "Klik for at se stigninger"}
+            </p>
           </div>
         </div>
       </div>
@@ -302,8 +339,8 @@ export default function SubscriptionsPage() {
           </div>
         </div>
 
-        {/* Search & Category Filter Pills */}
-        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
+        {/* Search, Category & Price Change Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-100">
           <input
             type="text"
             placeholder="Søg efter tjeneste eller kategori..."
@@ -328,15 +365,48 @@ export default function SubscriptionsPage() {
             })}
           </select>
 
-          {(searchQuery || categoryFilter) && (
+          {/* Quick Price Change Toggles */}
+          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold">
+            <button
+              onClick={() => setPriceFilter("all")}
+              className={`px-2.5 py-1 rounded-md transition-all ${
+                priceFilter === "all" ? "bg-white text-slate-900 shadow-2xs font-bold" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Alle ({subscriptions.length})
+            </button>
+            <button
+              onClick={() => setPriceFilter(priceFilter === "increase" ? "all" : "increase")}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
+                priceFilter === "increase" ? "bg-rose-600 text-white shadow-2xs font-bold" : "text-rose-600 hover:bg-rose-50"
+              }`}
+              title="Vis kun abonnementer med identificerede prisstigninger"
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Prisstigninger ({priceIncreaseCount})</span>
+            </button>
+            <button
+              onClick={() => setPriceFilter(priceFilter === "decrease" ? "all" : "decrease")}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
+                priceFilter === "decrease" ? "bg-emerald-600 text-white shadow-2xs font-bold" : "text-emerald-600 hover:bg-emerald-50"
+              }`}
+              title="Vis kun abonnementer med prisfald"
+            >
+              <TrendingDown className="w-3.5 h-3.5" />
+              <span>Prisfald ({priceDecreaseCount})</span>
+            </button>
+          </div>
+
+          {(searchQuery || categoryFilter || priceFilter !== "all") && (
             <button
               onClick={() => {
                 setSearchQuery("");
                 setCategoryFilter("");
+                setPriceFilter("all");
               }}
-              className="text-xs text-blue-600 hover:text-blue-700 font-semibold underline"
+              className="text-xs text-blue-600 hover:text-blue-700 font-semibold underline ml-1"
             >
-              Ryd filtre
+              Nulstil filtre
             </button>
           )}
         </div>
@@ -457,6 +527,35 @@ export default function SubscriptionsPage() {
                           </span>
                         </div>
                       </div>
+
+                      {/* Price Change Detection Indicator */}
+                      {sub.priceChange?.hasChanged && (
+                        <div
+                          className={`mt-2.5 flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                            sub.priceChange.isIncrease
+                              ? "bg-rose-100/70 text-rose-800 border border-rose-200"
+                              : "bg-emerald-100/70 text-emerald-800 border border-emerald-200"
+                          }`}
+                          title={`Tidligere pris: ${formatDKK(sub.priceChange.previousAmount)} ➔ Nuværende pris: ${formatDKK(sub.priceChange.currentAmount)}`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            {sub.priceChange.isIncrease ? (
+                              <TrendingUp className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                            ) : (
+                              <TrendingDown className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            )}
+                            <span>
+                              {sub.priceChange.isIncrease ? "Prisstigning:" : "Prisfald:"}{" "}
+                              {sub.priceChange.isIncrease ? "+" : ""}
+                              {formatDKK(sub.priceChange.diff)} ({sub.priceChange.isIncrease ? "+" : ""}
+                              {sub.priceChange.percentage}%)
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-600 font-mono">
+                            {formatDKK(sub.priceChange.previousAmount)} ➔ {formatDKK(sub.priceChange.currentAmount)}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Dates & Due Countdown */}

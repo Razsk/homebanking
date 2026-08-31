@@ -36,7 +36,8 @@ export async function GET() {
         orderBy: { amount: "desc" },
       }),
       prisma.transaction.findMany({
-        select: { id: true, text: true, counterparty: true, amount: true },
+        select: { id: true, text: true, counterparty: true, amount: true, date: true },
+        orderBy: { date: "asc" },
       }),
     ]);
 
@@ -59,14 +60,40 @@ export async function GET() {
       const finalCount = Math.max(matchedTxs.length, 2);
       const searchQuery = extractSearchQuery(s.name);
 
+      // Analyze price change history
+      let priceChange: any = null;
+      let latestAmount = s.amount;
+
+      if (matchedTxs.length >= 2) {
+        const amounts = matchedTxs.map((t) => Math.abs(t.amount));
+        const firstAmount = amounts[0];
+        const lastAmount = amounts[amounts.length - 1];
+        const diff = Math.round((lastAmount - firstAmount) * 100) / 100;
+        const percentage = Math.round(((lastAmount - firstAmount) / firstAmount) * 1000) / 10;
+
+        if (Math.abs(diff) >= 1) {
+          priceChange = {
+            hasChanged: true,
+            isIncrease: diff > 0,
+            previousAmount: firstAmount,
+            currentAmount: lastAmount,
+            diff,
+            percentage,
+          };
+          latestAmount = lastAmount;
+        }
+      }
+
       return {
         ...s,
+        amount: latestAmount,
         transactionCount: finalCount,
         searchQuery,
+        priceChange,
       };
     });
 
-    const monthlyTotal = subscriptions
+    const monthlyTotal = subsWithCounts
       .filter((s) => s.status === "active")
       .reduce((sum, s) => {
         let monthly = s.amount;
@@ -77,11 +104,15 @@ export async function GET() {
       }, 0);
 
     const yearlyTotal = monthlyTotal * 12;
+    const priceIncreaseCount = subsWithCounts.filter((s) => s.priceChange?.isIncrease).length;
+    const priceDecreaseCount = subsWithCounts.filter((s) => s.priceChange?.hasChanged && !s.priceChange?.isIncrease).length;
 
     return NextResponse.json({
       subscriptions: subsWithCounts,
       monthlyTotal: Math.round(monthlyTotal * 100) / 100,
       yearlyTotal: Math.round(yearlyTotal * 100) / 100,
+      priceIncreaseCount,
+      priceDecreaseCount,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

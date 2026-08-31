@@ -2,7 +2,7 @@
   "version": 1,
   "errors": [
     {
-      "id": "err_1788205859906_fiq8m",
+      "id": "err_1788206034119_6mkvp",
       "fingerprint": "fa990a1db4d4b764",
       "name": "PrismaClientValidationError",
       "message": "Missing required argument: data.amount",
@@ -11,10 +11,10 @@
       "route": "/api/transactions",
       "status": "resolved",
       "occurrenceCount": 1,
-      "firstSeenAt": "2026-08-31T19:50:59.906Z",
-      "lastSeenAt": "2026-08-31T19:50:59.906Z",
+      "firstSeenAt": "2026-08-31T19:53:54.119Z",
+      "lastSeenAt": "2026-08-31T19:53:54.119Z",
       "fixAttempts": 0,
-      "lastFixedAt": "2026-08-31T19:51:00.101Z",
+      "lastFixedAt": "2026-08-31T19:53:54.247Z",
       "resolutionNote": "Added fallback amount check"
     }
   ]
