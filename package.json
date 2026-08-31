@@ -10,7 +10,9 @@
     "seed": "tsx lib/seed.ts",
     "test": "vitest run",
     "generate-keys": "node scripts/generate-keys.js",
-    "reset-data": "node scripts/reset-data.js"
+    "reset-data": "node scripts/reset-data.js",
+    "build:dist": "python scripts/build_dist.py",
+    "deploy:public": "python scripts/deploy_dist.py"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
