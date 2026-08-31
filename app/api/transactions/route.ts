@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 export async function GET(req: Request) {
@@ -42,12 +42,34 @@ export async function GET(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const { id, categoryId, isSubscription } = body;
+    const { id, ids, categoryId, isSubscription } = body;
+
+    // Bulk update multiple transactions
+    if (Array.isArray(ids) && ids.length > 0) {
+      const updateData: any = {};
+      if (categoryId !== undefined) {
+        updateData.categoryId = categoryId ? categoryId : null;
+      }
+      if (isSubscription !== undefined) {
+        updateData.isSubscription = isSubscription;
+      }
+
+      const result = await prisma.transaction.updateMany({
+        where: { id: { in: ids } },
+        data: updateData,
+      });
+
+      return NextResponse.json({ success: true, count: result.count });
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: "Mangler transaktions-ID" }, { status: 400 });
+    }
 
     const updated = await prisma.transaction.update({
       where: { id },
       data: {
-        ...(categoryId !== undefined ? { categoryId } : {}),
+        ...(categoryId !== undefined ? { categoryId: categoryId ? categoryId : null } : {}),
         ...(isSubscription !== undefined ? { isSubscription } : {}),
       },
       include: { category: true },

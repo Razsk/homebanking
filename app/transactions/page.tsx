@@ -32,6 +32,10 @@ function TransactionsContent() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [onlySubscriptions, setOnlySubscriptions] = useState(false);
 
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   // Sync if URL search param changes
   useEffect(() => {
     const accId = searchParams.get("accountId");
@@ -66,6 +70,8 @@ function TransactionsContent() {
       setTransactions(txData.transactions || []);
       setCategories(txData.categories || []);
       setAccounts(Array.isArray(accData) ? accData : []);
+      // Clear selections on data refresh/filter changes
+      setSelectedIds(new Set());
     } catch (e) {
       console.error(e);
     } finally {
@@ -76,6 +82,29 @@ function TransactionsContent() {
   useEffect(() => {
     loadData();
   }, [search, selectedAccount, selectedCategory, onlySubscriptions]);
+
+  // Multi-select handlers
+  const isAllSelected = transactions.length > 0 && selectedIds.size === transactions.length;
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(transactions.map((t) => t.id)));
+    }
+  };
+
+  const handleToggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const handleCategoryChange = async (txId: string, newCategoryId: string) => {
     try {
@@ -95,6 +124,62 @@ function TransactionsContent() {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Bulk category assignment
+  const handleBulkCategoryChange = async (newCategoryId: string) => {
+    if (selectedIds.size === 0) return;
+    try {
+      setBulkProcessing(true);
+      const res = await fetch("/api/transactions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          categoryId: newCategoryId,
+        }),
+      });
+
+      if (res.ok) {
+        setTransactions((prev) =>
+          prev.map((t) =>
+            selectedIds.has(t.id)
+              ? { ...t, categoryId: newCategoryId, category: categories.find((c) => c.id === newCategoryId) }
+              : t
+          )
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  // Bulk subscription toggle
+  const handleBulkToggleSubscription = async (isSub: boolean) => {
+    if (selectedIds.size === 0) return;
+    try {
+      setBulkProcessing(true);
+      const res = await fetch("/api/transactions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          isSubscription: isSub,
+        }),
+      });
+
+      if (res.ok) {
+        setTransactions((prev) =>
+          prev.map((t) => (selectedIds.has(t.id) ? { ...t, isSubscription: isSub } : t))
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setBulkProcessing(false);
     }
   };
 
@@ -362,10 +447,19 @@ function TransactionsContent() {
             <table className="w-full text-left text-sm text-slate-600">
               <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold tracking-wider border-b border-slate-200">
                 <tr>
+                  <th className="py-3 px-3 text-center w-10">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={handleToggleSelectAll}
+                      className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                      title={isAllSelected ? "Fravælg alle" : "Vælg alle synlige"}
+                    />
+                  </th>
                   <th className="py-3 px-4">Dato</th>
                   <th className="py-3 px-4">Beskrivelse / Modpart</th>
                   <th className="py-3 px-4">Konto</th>
-                  <th className="py-3 px-4">Kategori</th>
+                  <th className="py-3 px-4">Hurtig Kategori</th>
                   <th className="py-3 px-4 text-center">Abonnement</th>
                   <th className="py-3 px-4 text-right">Beløb</th>
                   <th className="py-3 px-4 text-right">Opret Regel</th>
@@ -373,6 +467,7 @@ function TransactionsContent() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {transactions.map((tx) => {
+                  const isSelected = selectedIds.has(tx.id);
                   const isPos = tx.amount > 0;
                   const dateStr = new Date(tx.date).toLocaleDateString("da-DK", {
                     day: "numeric",
@@ -381,7 +476,22 @@ function TransactionsContent() {
                   });
 
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr
+                      key={tx.id}
+                      className={`transition-colors ${
+                        isSelected ? "bg-blue-50/80 hover:bg-blue-50" : "hover:bg-slate-50/70"
+                      }`}
+                    >
+                      {/* Row Checkbox */}
+                      <td className="py-3.5 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectOne(tx.id)}
+                          className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                        />
+                      </td>
+
                       <td className="py-3.5 px-4 whitespace-nowrap text-xs font-mono text-slate-500">
                         {dateStr}
                       </td>
@@ -406,19 +516,26 @@ function TransactionsContent() {
                         </span>
                       </td>
 
+                      {/* Fast Category Switcher */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <select
-                          value={tx.categoryId || ""}
-                          onChange={(e) => handleCategoryChange(tx.id, e.target.value)}
-                          className="text-xs py-1 px-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
-                        >
-                          <option value="">Ingen Kategori</option>
-                          {categories.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="inline-flex items-center gap-1.5 bg-white border border-slate-200 hover:border-blue-400 rounded-lg px-2 py-1 shadow-2xs transition-colors">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: tx.category?.color || "#94a3b8" }}
+                          />
+                          <select
+                            value={tx.categoryId || ""}
+                            onChange={(e) => handleCategoryChange(tx.id, e.target.value)}
+                            className="text-xs bg-transparent border-none focus:outline-none font-medium text-slate-700 cursor-pointer pr-1"
+                          >
+                            <option value="">Ingen Kategori</option>
+                            {categories.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </td>
 
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
@@ -457,6 +574,76 @@ function TransactionsContent() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Floating Multi-Select Action Toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-4xl w-[92%] sm:w-auto bg-slate-900/95 backdrop-blur-md text-white rounded-2xl shadow-2xl border border-slate-700 px-5 py-3 flex flex-wrap items-center justify-between gap-4 animate-in slide-in-from-bottom-5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500 text-white font-bold text-xs">
+              {selectedIds.size}
+            </span>
+            <span className="text-xs font-semibold text-slate-200">
+              {selectedIds.size === 1 ? "1 postering valgt" : `${selectedIds.size} posteringer valgt`}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Bulk Category Assign */}
+            <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5">
+              <span className="text-[11px] text-slate-400 font-medium">Tildel Kategori:</span>
+              <select
+                disabled={bulkProcessing}
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleBulkCategoryChange(e.target.value);
+                    e.target.value = "";
+                  }
+                }}
+                className="bg-transparent text-xs text-blue-400 font-bold border-none focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="" disabled className="bg-slate-900 text-white">Vælg fælles kategori...</option>
+                <option value="" className="bg-slate-900 text-slate-400">Ryd kategori (Ingen)</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Bulk Subscription Actions */}
+            <button
+              type="button"
+              disabled={bulkProcessing}
+              onClick={() => handleBulkToggleSubscription(true)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-purple-600/30 text-purple-200 hover:bg-purple-600/50 border border-purple-500/40 transition-colors flex items-center gap-1"
+            >
+              <Repeat className="w-3.5 h-3.5" />
+              <span>Marker Abonnement</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={bulkProcessing}
+              onClick={() => handleBulkToggleSubscription(false)}
+              className="px-3 py-1.5 text-xs font-medium rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
+            >
+              Fjern Abonnement
+            </button>
+
+            {/* Clear selection */}
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="px-2.5 py-1.5 text-xs text-slate-400 hover:text-white transition-colors underline"
+            >
+              Fravælg alle
+            </button>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Rule Creation Modal */}
