@@ -43,10 +43,10 @@ export default function SubscriptionsPage() {
         fetch("/api/categories"),
       ]);
 
-      const subData = await subRes.json();
-      const catData = await catRes.json();
+      const subData = subRes.ok ? await subRes.json().catch(() => ({})) : {};
+      const catData = catRes.ok ? await catRes.json().catch(() => ([])) : [];
 
-      setSubscriptions(subData.subscriptions || []);
+      setSubscriptions(Array.isArray(subData.subscriptions) ? subData.subscriptions : []);
       setMonthlyTotal(subData.monthlyTotal || 0);
       setYearlyTotal(subData.yearlyTotal || 0);
       setCategories(Array.isArray(catData) ? catData : []);
