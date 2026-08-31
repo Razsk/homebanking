@@ -90,15 +90,41 @@ export interface DetectedSubscription {
 }
 
 export function cleanMerchantName(raw: string): string {
-  const cleaned = raw
-    .replace(/Visa Køb (DKK|EUR|USD|SEK|NOK)\s+[\d\.,]+/gi, "")
-    .replace(/Bs [bB]etaling\s+/gi, "")
-    .replace(/Dankort-nota\s+/gi, "")
-    .replace(/(DKK|EUR|USD|SEK|NOK)\s+[\d\.,]+/gi, "")
-    .replace(/Den \d\d\.\d\d/gi, "")
+  const cleaned = (raw || "")
+    .replace(/dankort[- ]nota\s+/gi, "")
+    .replace(/visa køb (dkk|eur|usd|sek|nok)\s+[\d\.,]+/gi, "")
+    .replace(/visa køb\s+/gi, "")
+    .replace(/bs [bb]etaling\s+/gi, "")
+    .replace(/(dkk|eur|usd|sek|nok)\s+[\d\.,]+/gi, "")
+    .replace(/den \d\d\.\d\d/gi, "")
+    .replace(/[\d]{3,}/g, "") // strip receipt/terminal numbers
+    .replace(/[\*\_\#]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return cleaned || raw;
+
+  return (
+    cleaned
+      .split(" ")
+      .filter((w) => w.length > 0)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ") || raw
+  );
+}
+
+export function cleanMerchantKey(raw: string): string {
+  return (raw || "")
+    .toLowerCase()
+    .replace(/dankort[- ]nota\s+/gi, "")
+    .replace(/visa køb (dkk|eur|usd|sek|nok)\s+[\d\.,]+/gi, "")
+    .replace(/visa køb\s+/gi, "")
+    .replace(/bs [bb]etaling\s+/gi, "")
+    .replace(/(dkk|eur|usd|sek|nok)\s+[\d\.,]+/gi, "")
+    .replace(/den \d\d\.\d\d/gi, "")
+    .replace(/[\d]{3,}/g, "")
+    .replace(/[\d\.\-\/]/g, "")
+    .replace(/\s+(a\/s|aps|se|ab|ltd|com|dk|holding)$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function detectSubscriptionsFromTransactions(
@@ -125,11 +151,8 @@ export function detectSubscriptionsFromTransactions(
 
   for (const tx of expenses) {
     const raw = tx.counterparty || tx.text;
-    const cleanKey = raw
-      .toLowerCase()
-      .replace(/[\d\.\-\/]/g, "")
-      .replace(/\s+(a\/s|aps|se|ab|ltd|com|dk|holding)$/i, "")
-      .trim();
+    const cleanKey = cleanMerchantKey(raw);
+    if (!cleanKey || cleanKey.length < 2) continue;
 
     if (!groups[cleanKey]) groups[cleanKey] = [];
     groups[cleanKey].push(tx);
@@ -186,12 +209,8 @@ export function detectSubscriptionsFromTransactions(
       const nextDate = new Date(lastTx.dateObj);
       nextDate.setDate(nextDate.getDate() + daysToAdd);
 
-      // Name title case & clean merchant
-      const cleanRaw = cleanMerchantName(lastTx.counterparty || lastTx.text);
-      const displayName = cleanRaw
-        .split(" ")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-        .join(" ");
+      // Clean merchant display name
+      const displayName = cleanMerchantName(lastTx.counterparty || lastTx.text);
 
       results.push({
         name: displayName,
