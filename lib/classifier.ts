@@ -1,4 +1,4 @@
-﻿import crypto from "crypto";
+import crypto from "crypto";
 
 export interface RuleModel {
   id: string;
@@ -89,6 +89,18 @@ export interface DetectedSubscription {
   occurrences: number;
 }
 
+export function cleanMerchantName(raw: string): string {
+  const cleaned = raw
+    .replace(/Visa Køb (DKK|EUR|USD|SEK|NOK)\s+[\d\.,]+/gi, "")
+    .replace(/Bs [bB]etaling\s+/gi, "")
+    .replace(/Dankort-nota\s+/gi, "")
+    .replace(/(DKK|EUR|USD|SEK|NOK)\s+[\d\.,]+/gi, "")
+    .replace(/Den \d\d\.\d\d/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || raw;
+}
+
 export function detectSubscriptionsFromTransactions(
   transactions: {
     id: string;
@@ -168,10 +180,11 @@ export function detectSubscriptionsFromTransactions(
       const nextDate = new Date(lastTx.dateObj);
       nextDate.setDate(nextDate.getDate() + daysToAdd);
 
-      // Name title case
-      const displayName = (lastTx.counterparty || lastTx.text)
+      // Name title case & clean merchant
+      const cleanRaw = cleanMerchantName(lastTx.counterparty || lastTx.text);
+      const displayName = cleanRaw
         .split(" ")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
         .join(" ");
 
       results.push({

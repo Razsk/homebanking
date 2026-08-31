@@ -13,13 +13,14 @@
 # Production
 /build
 
-# Database
+# Database & Dev Error Store
 dev.db
 dev.db-journal
 dev.db-wal
 dev.db-shm
 *.sqlite
 *.sqlite3
+.dev_errors.json*
 
 # Environment & Keys
 .env

@@ -28,11 +28,15 @@ export async function GET(req: Request) {
         .split(/\s+/)
         .filter((w) => w.length > 0);
 
+      const noise = ["bs", "betaling", "køb", "visa", "dankort", "den", "nota", "dkk", "eur", "usd", "sek", "nok", "aps", "a/s", "ab", "se"];
       const significantWords = words.filter(
-        (w) => !["bs", "betaling", "køb", "visa", "dankort", "den", "nota"].includes(w.toLowerCase())
+        (w) => !noise.includes(w.toLowerCase())
       );
 
-      const filterWords = significantWords.length > 0 ? significantWords : words;
+      const merchantWords = significantWords.filter((w) => !/^[\d\.,]+$/.test(w));
+      const filterWords = merchantWords.length > 0 
+        ? merchantWords 
+        : (significantWords.length > 0 ? significantWords : words);
 
       where.AND = filterWords.map((w) => ({
         OR: [
