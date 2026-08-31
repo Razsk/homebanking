@@ -26,19 +26,16 @@ export async function POST(req: Request) {
     const crtPath = path.resolve('./public.crt');
     const privPath = path.resolve('./private.key');
 
-    if (publicKey && typeof publicKey === 'string' && publicKey.trim()) {
-      fs.writeFileSync(pubPath, publicKey.trim() + '
-', 'utf8');
+    if (publicKey && typeof publicKey === "string" && publicKey.trim()) {
+      fs.writeFileSync(pubPath, `${publicKey.trim()}\n`, "utf8");
     }
 
-    if (certificate && typeof certificate === 'string' && certificate.trim()) {
-      fs.writeFileSync(crtPath, certificate.trim() + '
-', 'utf8');
+    if (certificate && typeof certificate === "string" && certificate.trim()) {
+      fs.writeFileSync(crtPath, `${certificate.trim()}\n`, "utf8");
     }
 
-    if (privateKey && typeof privateKey === 'string' && privateKey.trim()) {
-      fs.writeFileSync(privPath, privateKey.trim() + '
-', 'utf8');
+    if (privateKey && typeof privateKey === "string" && privateKey.trim()) {
+      fs.writeFileSync(privPath, `${privateKey.trim()}\n`, "utf8");
     }
 
     return NextResponse.json({
