@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -19,11 +22,24 @@ export async function GET(req: Request) {
     if (accountId) where.accountId = accountId;
     if (categoryId) where.categoryId = categoryId;
     if (isSubscription === "true") where.isSubscription = true;
-    if (search) {
-      where.OR = [
-        { text: { contains: search } },
-        { counterparty: { contains: search } },
-      ];
+    if (search && search.trim()) {
+      const words = search
+        .trim()
+        .split(/\s+/)
+        .filter((w) => w.length > 0);
+
+      const significantWords = words.filter(
+        (w) => !["bs", "betaling", "køb", "visa", "dankort", "den", "nota"].includes(w.toLowerCase())
+      );
+
+      const filterWords = significantWords.length > 0 ? significantWords : words;
+
+      where.AND = filterWords.map((w) => ({
+        OR: [
+          { text: { contains: w } },
+          { counterparty: { contains: w } },
+        ],
+      }));
     }
 
     const totalCount = await prisma.transaction.count({ where });

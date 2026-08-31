@@ -20,6 +20,9 @@ import { SyncButton } from "../components/SyncButton";
 function TransactionsContent() {
   const searchParams = useSearchParams();
   const initialAccountId = searchParams.get("accountId") || "";
+  const initialSearch = searchParams.get("search") || "";
+  const initialCategoryId = searchParams.get("categoryId") || "";
+  const initialIsSub = searchParams.get("isSubscription") === "true";
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -27,10 +30,10 @@ function TransactionsContent() {
   const [loading, setLoading] = useState(true);
 
   // Filters
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [selectedAccount, setSelectedAccount] = useState(initialAccountId);
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [onlySubscriptions, setOnlySubscriptions] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(initialCategoryId);
+  const [onlySubscriptions, setOnlySubscriptions] = useState(initialIsSub);
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -45,9 +48,16 @@ function TransactionsContent() {
   // Sync if URL search param changes
   useEffect(() => {
     const accId = searchParams.get("accountId");
-    if (accId !== null) {
-      setSelectedAccount(accId);
-    }
+    if (accId !== null) setSelectedAccount(accId);
+
+    const sQuery = searchParams.get("search");
+    if (sQuery !== null) setSearch(sQuery);
+
+    const catId = searchParams.get("categoryId");
+    if (catId !== null) setSelectedCategory(catId);
+
+    const isSub = searchParams.get("isSubscription");
+    if (isSub !== null) setOnlySubscriptions(isSub === "true");
   }, [searchParams]);
 
   // Rule creation modal state
