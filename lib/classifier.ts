@@ -151,28 +151,34 @@ export function detectSubscriptionsFromTransactions(
       intervals.push(diffDays);
     }
 
-    const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
     const avgAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length;
     const amountVariation = Math.max(...amounts) - Math.min(...amounts);
 
-    // Check if amount is consistent (within 15% variation or 50 DKK)
-    const isAmountConsistent = amountVariation <= avgAmount * 0.15 || amountVariation < 50;
+    // Strict amount consistency: relative variation <= 15% OR (for small foreign currency/fee charges) <= 15 DKK
+    const isAmountConsistent = (amountVariation <= avgAmount * 0.15) || (amountVariation <= 15 && avgAmount < 150);
 
+    // Consistency of intervals: at least 60% of intervals must fall in the expected window
     let intervalType: "weekly" | "monthly" | "quarterly" | "yearly" | null = null;
     let daysToAdd = 30;
 
-    if (avgInterval >= 5 && avgInterval <= 9) {
-      intervalType = "weekly";
-      daysToAdd = 7;
-    } else if (avgInterval >= 25 && avgInterval <= 36) {
+    const totalIntervals = intervals.length;
+    const weeklyCount = intervals.filter((d) => d >= 5 && d <= 9).length;
+    const monthlyCount = intervals.filter((d) => d >= 25 && d <= 36).length;
+    const quarterlyCount = intervals.filter((d) => d >= 80 && d <= 100).length;
+    const yearlyCount = intervals.filter((d) => d >= 340 && d <= 390).length;
+
+    if (monthlyCount / totalIntervals >= 0.6 || (totalIntervals === 1 && monthlyCount === 1)) {
       intervalType = "monthly";
       daysToAdd = 30;
-    } else if (avgInterval >= 80 && avgInterval <= 100) {
+    } else if (quarterlyCount / totalIntervals >= 0.6 || (totalIntervals === 1 && quarterlyCount === 1)) {
       intervalType = "quarterly";
       daysToAdd = 90;
-    } else if (avgInterval >= 340 && avgInterval <= 390) {
+    } else if (yearlyCount / totalIntervals >= 0.6 || (totalIntervals === 1 && yearlyCount === 1)) {
       intervalType = "yearly";
       daysToAdd = 365;
+    } else if (weeklyCount / totalIntervals >= 0.6 || (totalIntervals === 1 && weeklyCount === 1)) {
+      intervalType = "weekly";
+      daysToAdd = 7;
     }
 
     if (intervalType && isAmountConsistent) {

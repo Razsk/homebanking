@@ -88,8 +88,10 @@ export async function POST(req: Request) {
     // Refresh Subscriptions
     const allTransactions = await prisma.transaction.findMany();
     const detectedSubs = detectSubscriptionsFromTransactions(allTransactions);
+    const validNames = new Set<string>();
 
     for (const sub of detectedSubs) {
+      validNames.add(sub.name);
       const existingSub = await prisma.subscription.findFirst({
         where: { name: sub.name },
       });
@@ -119,6 +121,14 @@ export async function POST(req: Request) {
         });
       }
     }
+
+    // Prune stale auto-detected subscriptions that no longer pass strict frequency/variance checks
+    await prisma.subscription.deleteMany({
+      where: {
+        detectedAuto: true,
+        name: { notIn: Array.from(validNames) },
+      },
+    });
 
     return NextResponse.json({
       success: true,
