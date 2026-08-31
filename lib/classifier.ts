@@ -87,6 +87,8 @@ export interface DetectedSubscription {
   lastPaymentDate: Date;
   nextPaymentDate: Date;
   occurrences: number;
+  status: "active" | "inactive";
+  isInactive?: boolean;
 }
 
 export function cleanMerchantKey(raw: string): string {
@@ -273,6 +275,20 @@ export function detectSubscriptionsFromTransactions(
       // Clean merchant display name
       const displayName = cleanMerchantName(lastTx.counterparty || lastTx.text);
 
+      // Inactivity detection based on elapsed days since last payment
+      const latestRefDate = expenses.length > 0 ? expenses[expenses.length - 1].dateObj : new Date();
+      const daysSinceLastPayment = Math.round(
+        (latestRefDate.getTime() - lastTx.dateObj.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      let thresholdDays = 60; // monthly default
+      if (intervalType === "weekly") thresholdDays = 21;
+      if (intervalType === "quarterly") thresholdDays = 150;
+      if (intervalType === "yearly") thresholdDays = 450;
+
+      const isInactive = daysSinceLastPayment > thresholdDays;
+      const status: "active" | "inactive" = isInactive ? "inactive" : "active";
+
       results.push({
         name: displayName,
         amount: Math.round(avgAmount * 100) / 100,
@@ -281,6 +297,8 @@ export function detectSubscriptionsFromTransactions(
         lastPaymentDate: lastTx.dateObj,
         nextPaymentDate: nextDate,
         occurrences: txList.length,
+        status,
+        isInactive,
       });
     }
   }

@@ -24,6 +24,9 @@ export default function SubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [yearlyTotal, setYearlyTotal] = useState(0);
+  const [savedAnnualTotal, setSavedAnnualTotal] = useState(0);
+  const [activeCount, setActiveCount] = useState(0);
+  const [inactiveCount, setInactiveCount] = useState(0);
   const [priceIncreaseCount, setPriceIncreaseCount] = useState(0);
   const [priceDecreaseCount, setPriceDecreaseCount] = useState(0);
   const [categories, setCategories] = useState<any[]>([]);
@@ -33,6 +36,7 @@ export default function SubscriptionsPage() {
   const [sortBy, setSortBy] = useState<"category" | "yearlyDesc" | "yearlyAsc" | "dueDateAsc" | "dueDateDesc" | "nameAsc">("yearlyDesc");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [priceFilter, setPriceFilter] = useState<"all" | "increase" | "decrease">("all");
 
   // Add Subscription Modal State
@@ -57,6 +61,9 @@ export default function SubscriptionsPage() {
       setSubscriptions(Array.isArray(subData.subscriptions) ? subData.subscriptions : []);
       setMonthlyTotal(subData.monthlyTotal || 0);
       setYearlyTotal(subData.yearlyTotal || 0);
+      setSavedAnnualTotal(subData.savedAnnualTotal || 0);
+      setActiveCount(subData.activeCount || 0);
+      setInactiveCount(subData.inactiveCount || 0);
       setPriceIncreaseCount(subData.priceIncreaseCount || 0);
       setPriceDecreaseCount(subData.priceDecreaseCount || 0);
       setCategories(Array.isArray(catData) ? catData : []);
@@ -187,6 +194,12 @@ export default function SubscriptionsPage() {
       if (categoryFilter && sub.categoryId !== categoryFilter) {
         return false;
       }
+      if (statusFilter === "active" && sub.status !== "active") {
+        return false;
+      }
+      if (statusFilter === "inactive" && sub.status === "active") {
+        return false;
+      }
       if (priceFilter === "increase" && !sub.priceChange?.isIncrease) {
         return false;
       }
@@ -271,7 +284,13 @@ export default function SubscriptionsPage() {
           </div>
         </div>
 
-        <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
+        <div 
+          onClick={() => setStatusFilter(statusFilter === "active" ? "all" : "active")}
+          className={`p-5 bg-white rounded-2xl border shadow-sm cursor-pointer transition-all ${
+            statusFilter === "active" ? "border-emerald-400 ring-2 ring-emerald-200 bg-emerald-50/20" : "border-slate-200/80 hover:border-emerald-300"
+          }`}
+          title="Klik for kun at se aktive abonnementer"
+        >
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-slate-500">Aktive Abonnementer</span>
             <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -279,8 +298,15 @@ export default function SubscriptionsPage() {
             </div>
           </div>
           <div className="mt-4">
-            <h2 className="text-2xl font-bold text-slate-900">{subscriptions.filter((s) => s.status === "active").length} stk</h2>
-            <p className="text-xs text-slate-400 mt-1">{subscriptions.filter((s) => s.detectedAuto).length} fundet automatisk</p>
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-2xl font-bold text-slate-900">{activeCount} stk</h2>
+              {inactiveCount > 0 && (
+                <span className="text-xs font-semibold text-slate-500">({inactiveCount} opsagte)</span>
+              )}
+            </div>
+            <p className="text-xs text-emerald-600 font-medium mt-1">
+              {inactiveCount > 0 ? `Du sparer ${formatDKK(savedAnnualTotal)}/år på opsagte` : `${subscriptions.filter((s) => s.detectedAuto).length} fundet automatisk`}
+            </p>
           </div>
         </div>
 
@@ -339,14 +365,14 @@ export default function SubscriptionsPage() {
           </div>
         </div>
 
-        {/* Search, Category & Price Change Filter Pills */}
+        {/* Search, Category, Status & Price Change Filter Pills */}
         <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-100">
           <input
             type="text"
             placeholder="Søg efter tjeneste eller kategori..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[200px]"
+            className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[180px]"
           />
 
           <select
@@ -365,16 +391,40 @@ export default function SubscriptionsPage() {
             })}
           </select>
 
-          {/* Quick Price Change Toggles */}
+          {/* Status Filter Toggles (Active / Inactive) */}
           <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold">
             <button
-              onClick={() => setPriceFilter("all")}
+              onClick={() => setStatusFilter("all")}
               className={`px-2.5 py-1 rounded-md transition-all ${
-                priceFilter === "all" ? "bg-white text-slate-900 shadow-2xs font-bold" : "text-slate-500 hover:text-slate-800"
+                statusFilter === "all" ? "bg-white text-slate-900 shadow-2xs font-bold" : "text-slate-500 hover:text-slate-800"
               }`}
             >
               Alle ({subscriptions.length})
             </button>
+            <button
+              onClick={() => setStatusFilter(statusFilter === "active" ? "all" : "active")}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
+                statusFilter === "active" ? "bg-emerald-600 text-white shadow-2xs font-bold" : "text-emerald-700 hover:bg-emerald-50"
+              }`}
+              title="Vis kun aktive abonnementer"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Aktive ({activeCount})</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter(statusFilter === "inactive" ? "all" : "inactive")}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
+                statusFilter === "inactive" ? "bg-rose-700 text-white shadow-2xs font-bold" : "text-rose-700 hover:bg-rose-50"
+              }`}
+              title="Vis opsagte/inaktive abonnementer hvor betalinger er stoppet"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>Opsagte ({inactiveCount})</span>
+            </button>
+          </div>
+
+          {/* Quick Price Change Toggles */}
+          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold">
             <button
               onClick={() => setPriceFilter(priceFilter === "increase" ? "all" : "increase")}
               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
@@ -397,11 +447,12 @@ export default function SubscriptionsPage() {
             </button>
           </div>
 
-          {(searchQuery || categoryFilter || priceFilter !== "all") && (
+          {(searchQuery || categoryFilter || statusFilter !== "all" || priceFilter !== "all") && (
             <button
               onClick={() => {
                 setSearchQuery("");
                 setCategoryFilter("");
+                setStatusFilter("all");
                 setPriceFilter("all");
               }}
               className="text-xs text-blue-600 hover:text-blue-700 font-semibold underline ml-1"
@@ -558,31 +609,50 @@ export default function SubscriptionsPage() {
                       )}
                     </div>
 
-                    {/* Dates & Due Countdown */}
-                    <div className="mt-4 pt-3 border-t border-slate-100 text-xs space-y-2">
-                      <div className="flex items-center justify-between text-slate-500">
-                        <span>Sidst betalt:</span>
-                        <span className="font-medium text-slate-700 font-mono text-[11px]">{lastDateFormatted}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500 font-medium">Næste forfald:</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-slate-800 font-mono text-[11px]">{nextDateFormatted}</span>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              daysUntil.isOverdue
-                                ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                : daysUntil.isSoon
-                                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                : "bg-blue-50 text-blue-700 border border-blue-200"
-                            }`}
-                          >
-                            {daysUntil.label}
+                    {/* Dates & Due Countdown or Inactive Savings */}
+                    {sub.status !== "active" ? (
+                      <div className="mt-4 pt-3 border-t border-slate-200 text-xs space-y-2">
+                        <div className="flex items-center justify-between text-slate-500">
+                          <span>Sidst betalt:</span>
+                          <span className="font-medium text-slate-700 font-mono text-[11px]">{lastDateFormatted}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 font-medium">Abonnementsstatus:</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                            Opsagt / Stoppet
                           </span>
                         </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-emerald-700 font-medium">
+                          <span>Årlig besparelse:</span>
+                          <span className="font-bold font-mono text-[11px]">+{formatDKK(annualAmount)}/år</span>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="mt-4 pt-3 border-t border-slate-100 text-xs space-y-2">
+                        <div className="flex items-center justify-between text-slate-500">
+                          <span>Sidst betalt:</span>
+                          <span className="font-medium text-slate-700 font-mono text-[11px]">{lastDateFormatted}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 font-medium">Næste forfald:</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-800 font-mono text-[11px]">{nextDateFormatted}</span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                daysUntil.isOverdue
+                                  ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                  : daysUntil.isSoon
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-blue-50 text-blue-700 border border-blue-200"
+                              }`}
+                            >
+                              {daysUntil.label}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Footer status / action */}
@@ -592,17 +662,17 @@ export default function SubscriptionsPage() {
                         className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${
                           sub.status === "active"
                             ? "bg-emerald-50 text-emerald-700"
-                            : "bg-slate-100 text-slate-500"
+                            : "bg-rose-50 text-rose-700 border border-rose-200/60 font-semibold"
                         }`}
                       >
-                        {sub.status === "active" ? "Aktivt" : "Sat på pause"}
+                        {sub.status === "active" ? "Aktivt" : "Opsagt / Inaktiv"}
                       </span>
 
                       <button
-                        onClick={() => handleStatusChange(sub.id, sub.status === "active" ? "paused" : "active")}
+                        onClick={() => handleStatusChange(sub.id, sub.status === "active" ? "inactive" : "active")}
                         className="text-xs font-medium text-slate-400 hover:text-slate-700 transition-colors underline"
                       >
-                        {sub.status === "active" ? "Pause" : "Genaktiver"}
+                        {sub.status === "active" ? "Markér som opsagt" : "Genaktiver"}
                       </button>
                     </div>
 

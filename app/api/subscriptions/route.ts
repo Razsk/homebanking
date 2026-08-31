@@ -93,17 +93,27 @@ export async function GET() {
       };
     });
 
-    const monthlyTotal = subsWithCounts
-      .filter((s) => s.status === "active")
-      .reduce((sum, s) => {
-        let monthly = s.amount;
-        if (s.interval === "weekly") monthly = s.amount * 4.33;
-        if (s.interval === "quarterly") monthly = s.amount / 3;
-        if (s.interval === "yearly") monthly = s.amount / 12;
-        return sum + monthly;
-      }, 0);
+    const activeSubs = subsWithCounts.filter((s) => s.status === "active");
+    const inactiveSubs = subsWithCounts.filter((s) => s.status !== "active");
+
+    const monthlyTotal = activeSubs.reduce((sum, s) => {
+      let monthly = s.amount;
+      if (s.interval === "weekly") monthly = s.amount * 4.33;
+      if (s.interval === "quarterly") monthly = s.amount / 3;
+      if (s.interval === "yearly") monthly = s.amount / 12;
+      return sum + monthly;
+    }, 0);
 
     const yearlyTotal = monthlyTotal * 12;
+
+    const savedAnnualTotal = inactiveSubs.reduce((sum, s) => {
+      let annual = s.amount * 12;
+      if (s.interval === "weekly") annual = s.amount * 52;
+      if (s.interval === "quarterly") annual = s.amount * 4;
+      if (s.interval === "yearly") annual = s.amount * 1;
+      return sum + annual;
+    }, 0);
+
     const priceIncreaseCount = subsWithCounts.filter((s) => s.priceChange?.isIncrease).length;
     const priceDecreaseCount = subsWithCounts.filter((s) => s.priceChange?.hasChanged && !s.priceChange?.isIncrease).length;
 
@@ -111,6 +121,9 @@ export async function GET() {
       subscriptions: subsWithCounts,
       monthlyTotal: Math.round(monthlyTotal * 100) / 100,
       yearlyTotal: Math.round(yearlyTotal * 100) / 100,
+      savedAnnualTotal: Math.round(savedAnnualTotal * 100) / 100,
+      activeCount: activeSubs.length,
+      inactiveCount: inactiveSubs.length,
       priceIncreaseCount,
       priceDecreaseCount,
     });

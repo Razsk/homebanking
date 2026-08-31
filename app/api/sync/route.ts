@@ -104,6 +104,7 @@ export async function POST(req: Request) {
             interval: sub.interval,
             lastPaymentDate: sub.lastPaymentDate,
             nextPaymentDate: sub.nextPaymentDate,
+            status: sub.status,
           },
         });
       } else {
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
             categoryId: sub.categoryId,
             lastPaymentDate: sub.lastPaymentDate,
             nextPaymentDate: sub.nextPaymentDate,
-            status: "active",
+            status: sub.status,
             detectedAuto: true,
           },
         });
