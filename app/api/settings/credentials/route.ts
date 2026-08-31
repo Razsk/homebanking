@@ -15,12 +15,13 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { appId, keyId } = await req.json();
+    const { appId, keyId, redirectUrl } = await req.json();
 
-    if (!appId || !keyId) {
-      return NextResponse.json({ error: "Både Application ID og Key ID skal udfyldes." }, { status: 400 });
+    if (!appId) {
+      return NextResponse.json({ error: "Application ID skal udfyldes." }, { status: 400 });
     }
 
+    const effectiveKeyId = keyId && keyId.trim() !== "" ? keyId.trim() : appId.trim();
     const envPath = path.resolve(".env");
     let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
 
@@ -32,16 +33,25 @@ export async function POST(req: Request) {
     }
 
     if (envContent.includes("ENABLE_BANKING_KEY_ID=")) {
-      envContent = envContent.replace(/ENABLE_BANKING_KEY_ID=.*/g, `ENABLE_BANKING_KEY_ID="${keyId.trim()}"`);
+      envContent = envContent.replace(/ENABLE_BANKING_KEY_ID=.*/g, `ENABLE_BANKING_KEY_ID="${effectiveKeyId}"`);
     } else {
-      envContent += `\nENABLE_BANKING_KEY_ID="${keyId.trim()}"`;
+      envContent += `\nENABLE_BANKING_KEY_ID="${effectiveKeyId}"`;
+    }
+
+    if (redirectUrl && redirectUrl.trim() !== "") {
+      if (envContent.includes("ENABLE_BANKING_REDIRECT_URL=")) {
+        envContent = envContent.replace(/ENABLE_BANKING_REDIRECT_URL=.*/g, `ENABLE_BANKING_REDIRECT_URL="${redirectUrl.trim()}"`);
+      } else {
+        envContent += `\nENABLE_BANKING_REDIRECT_URL="${redirectUrl.trim()}"`;
+      }
+      process.env.ENABLE_BANKING_REDIRECT_URL = redirectUrl.trim();
     }
 
     fs.writeFileSync(envPath, envContent, "utf8");
 
     // Also update process.env in memory
     process.env.ENABLE_BANKING_APP_ID = appId.trim();
-    process.env.ENABLE_BANKING_KEY_ID = keyId.trim();
+    process.env.ENABLE_BANKING_KEY_ID = effectiveKeyId;
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -44,9 +44,11 @@ export default function SettingsPage() {
   // Credential inputs
   const [appIdInput, setAppIdInput] = useState("");
   const [keyIdInput, setKeyIdInput] = useState("");
+  const [redirectUrlInput, setRedirectUrlInput] = useState("http://localhost:3000/api/auth/callback");
   const [savingCreds, setSavingCreds] = useState(false);
   const [credSaved, setCredSaved] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
+  const [copiedRedirectUrl, setCopiedRedirectUrl] = useState(false);
   const [regeneratingKeys, setRegeneratingKeys] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
@@ -102,7 +104,9 @@ export default function SettingsPage() {
 
       if (cred.publicKey && !manualPublicKey) setManualPublicKey(cred.publicKey);
       if (cred.certificate && !manualCertificate) setManualCertificate(cred.certificate);
+      if (cred.appId && !appIdInput) setAppIdInput(cred.appId);
       if (cred.keyId && !keyIdInput) setKeyIdInput(cred.keyId);
+      if (cred.redirectUrl) setRedirectUrlInput(cred.redirectUrl);
       if (cat.length > 0 && !ruleCatId) setRuleCatId(cat[0].id);
     } catch (e) {
       console.error("Fejl ved indlaesning af indstillinger:", e);
@@ -122,11 +126,16 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings/credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appId: appIdInput, keyId: keyIdInput }),
+        body: JSON.stringify({
+          appId: appIdInput,
+          keyId: keyIdInput || appIdInput,
+          redirectUrl: redirectUrlInput,
+        }),
       });
       if (res.ok) {
         setCredSaved(true);
         setTimeout(() => setCredSaved(false), 3000);
+        alert("API nøgler og Redirect URL gemt i .env!");
         loadAllData();
       } else {
         const err = await res.json();
@@ -667,7 +676,7 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     required
-                    placeholder="f.eks. a1b2c3d4-e5f6-7890-..."
+                    placeholder="f.eks. 273423cd-ed14-4612-9b16-..."
                     value={appIdInput}
                     onChange={(e) => setAppIdInput(e.target.value)}
                     className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
@@ -676,12 +685,11 @@ export default function SettingsPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Key ID (kid)
+                    Key ID (kid) <span className="text-slate-400 font-normal">(Valgfri — standard er App ID)</span>
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="f.eks. key-prod-01"
+                    placeholder={appIdInput || "Samme som Application ID"}
                     value={keyIdInput}
                     onChange={(e) => setKeyIdInput(e.target.value)}
                     className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
@@ -689,16 +697,48 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <div className="text-xs text-slate-400">
-                  Redirect URL: <code className="text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded font-mono">{credStatus?.redirectUrl || "http://localhost:3000/api/auth/callback"}</code>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase">
+                    Redirect URL (Callback)
+                  </label>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                    Skal registreres i Enable Banking
+                  </span>
                 </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={redirectUrlInput}
+                    onChange={(e) => setRedirectUrlInput(e.target.value)}
+                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(redirectUrlInput);
+                      setCopiedRedirectUrl(true);
+                      setTimeout(() => setCopiedRedirectUrl(false), 3000);
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 transition-colors shrink-0"
+                  >
+                    {copiedRedirectUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+                    <span>{copiedRedirectUrl ? "Kopieret!" : "Kopiér URL"}</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Kopiér denne URL og indsæt den under <strong>&quot;Redirect URLs&quot;</strong> i Enable Banking kontrolpanelet for din applikation.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end pt-2">
                 <button
                   type="submit"
                   disabled={savingCreds}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
                 >
-                  {savingCreds ? "Gemmer..." : credSaved ? "Gemt i .env!" : "Gem API Nøgler"}
+                  {savingCreds ? "Gemmer..." : credSaved ? "Gemt i .env!" : "Gem API Nøgler & URL"}
                 </button>
               </div>
             </form>
