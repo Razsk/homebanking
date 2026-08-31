@@ -58,14 +58,16 @@ export class EnableBankingClient {
   public getConfigurationStatus() {
     const keyPath = path.resolve(this.config.privateKeyPath);
     const pubPath = path.resolve("./public.key");
+    const crtPath = path.resolve("./public.crt");
 
     return {
       isConfigured: this.isConfigured(),
       hasAppId: Boolean(this.config.appId && this.config.appId.trim() !== ""),
       hasKeyId: Boolean((this.config.keyId || this.config.appId) && (this.config.keyId || this.config.appId).trim() !== ""),
       hasPrivateKey: fs.existsSync(keyPath),
-      hasPublicKey: fs.existsSync(pubPath),
+      hasPublicKey: fs.existsSync(pubPath) || fs.existsSync(crtPath),
       publicKey: fs.existsSync(pubPath) ? fs.readFileSync(pubPath, "utf8") : null,
+      certificate: fs.existsSync(crtPath) ? fs.readFileSync(crtPath, "utf8") : (fs.existsSync(pubPath) ? fs.readFileSync(pubPath, "utf8") : null),
       appId: this.config.appId ? `${this.config.appId.slice(0, 4)}...${this.config.appId.slice(-4)}` : "",
       keyId: this.config.keyId || this.config.appId || "",
       redirectUrl: this.config.redirectUrl,
