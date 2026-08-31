@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omdirigerer til Homebanking...</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    code { font-family: 'JetBrains Mono', monospace; }
+  </style>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const search = window.location.search || '';
+      const localCallback = 'http://localhost:3000/api/auth/callback' + search;
+      
+      const link = document.getElementById('manual-link');
+      if (link) link.href = localCallback;
+
+      const codeDisplay = document.getElementById('code-display');
+      const params = new URLSearchParams(search);
+      const code = params.get('code');
+      if (code && codeDisplay) {
+        codeDisplay.textContent = code;
+      }
+      
+      // Auto-redirect to local server after 600ms
+      setTimeout(() => {
+        window.location.href = localCallback;
+      }, 600);
+    });
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-6">
+  <div class="max-w-md w-full p-8 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl text-center space-y-6">
+    <div class="w-16 h-16 rounded-2xl bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto text-3xl font-bold animate-pulse shadow-lg shadow-blue-500/10">
+      🔄
+    </div>
+    
+    <div class="space-y-2">
+      <h1 class="text-2xl font-bold text-white tracking-tight">MitID Godkendt!</h1>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        Du omdirigeres nu automatisk tilbage til din lokale Homebanking applikation på computeren for at færdiggøre forbindelsen.
+      </p>
+    </div>
+
+    <div class="p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80 text-left space-y-1.5">
+      <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Omdirigerer til:</span>
+      <code class="text-xs text-blue-400 break-all block font-mono">http://localhost:3000/api/auth/callback</code>
+    </div>
+
+    <div class="pt-2">
+      <a id="manual-link" href="http://localhost:3000/api/auth/callback" class="inline-flex items-center justify-center w-full px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/20 transition-all hover:scale-[1.02] active:scale-95">
+        Klik her hvis du ikke omdirigeres automatisk →
+      </a>
+    </div>
+
+    <p class="text-[10px] text-slate-600">
+      Homebanking • Open Banking PSD2 AISP
+    </p>
+  </div>
+</body>
+</html>
