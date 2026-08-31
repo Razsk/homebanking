@@ -50,6 +50,15 @@ export default function SettingsPage() {
   const [regeneratingKeys, setRegeneratingKeys] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
+  // Key & Certificate manual editing
+  const [keyDisplayMode, setKeyDisplayMode] = useState<"crt" | "key">("crt");
+  const [showManualKeyEdit, setShowManualKeyEdit] = useState(false);
+  const [manualPublicKey, setManualPublicKey] = useState("");
+  const [manualCertificate, setManualCertificate] = useState("");
+  const [manualPrivateKey, setManualPrivateKey] = useState("");
+  const [savingManualKeys, setSavingManualKeys] = useState(false);
+  const [manualKeysSaved, setManualKeysSaved] = useState(false);
+
   // Category modal / form
   const [newCatName, setNewCatName] = useState("");
   const [newCatColor, setNewCatColor] = useState("#3b82f6");
@@ -91,6 +100,8 @@ export default function SettingsPage() {
       setRules(rul.rules || []);
       setPreferences(pref);
 
+      if (cred.publicKey && !manualPublicKey) setManualPublicKey(cred.publicKey);
+      if (cred.certificate && !manualCertificate) setManualCertificate(cred.certificate);
       if (cred.keyId && !keyIdInput) setKeyIdInput(cred.keyId);
       if (cat.length > 0 && !ruleCatId) setRuleCatId(cat[0].id);
     } catch (e) {
@@ -129,13 +140,15 @@ export default function SettingsPage() {
   };
 
   const handleRegenerateKeys = async () => {
-    if (!confirm("Vil du generere et nyt RSA-2048 nøglepar? Du skal uploade den nye public.key til Enable Banking bagefter.")) return;
+    if (!confirm("Vil du generere et nyt RSA-4096 nøglepar og X.509 certifikat? Du skal uploade det nye certifikat til Enable Banking bagefter.")) return;
     try {
       setRegeneratingKeys(true);
       const res = await fetch("/api/settings/keys/regenerate", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
         alert(data.message);
+        if (data.publicKey) setManualPublicKey(data.publicKey);
+        if (data.certificate) setManualCertificate(data.certificate);
         loadAllData();
       } else {
         alert("Fejl: " + data.error);
@@ -144,6 +157,37 @@ export default function SettingsPage() {
       alert("Fejl: " + e.message);
     } finally {
       setRegeneratingKeys(false);
+    }
+  };
+
+  const handleSaveManualKeys = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSavingManualKeys(true);
+      const res = await fetch("/api/settings/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publicKey: manualPublicKey,
+          certificate: manualCertificate,
+          privateKey: manualPrivateKey,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setManualKeysSaved(true);
+        setTimeout(() => setManualKeysSaved(false), 3000);
+        setShowManualKeyEdit(false);
+        setManualPrivateKey(""); // Clear sensitive input
+        alert("Nøglefiler er opdateret i projektet!");
+        loadAllData();
+      } else {
+        alert("Fejl: " + data.error);
+      }
+    } catch (e: any) {
+      alert("Fejl: " + e.message);
+    } finally {
+      setSavingManualKeys(false);
     }
   };
 
@@ -456,37 +500,161 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Public Key Display */}
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-slate-700 uppercase">Din Offentlige RSA Nøgle (public.key)</span>
+            {/* Public Certificate & Key Display with Manual Editing */}
+            <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-slate-200/80 p-0.5 rounded-lg text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setKeyDisplayMode("crt")}
+                      className={`px-3 py-1.5 rounded-md transition-all ${
+                        keyDisplayMode === "crt"
+                          ? "bg-white text-blue-600 shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      X.509 Certifikat (public.crt)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setKeyDisplayMode("key")}
+                      className={`px-3 py-1.5 rounded-md transition-all ${
+                        keyDisplayMode === "key"
+                          ? "bg-white text-blue-600 shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      Offentlig Nøgle (public.key)
+                    </button>
+                  </div>
+                  {keyDisplayMode === "crt" && (
+                    <span className="hidden md:inline-block px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full">
+                      Til Enable Banking
+                    </span>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleRegenerateKeys}
-                    disabled={regeneratingKeys}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-md shadow-2xs"
+                    type="button"
+                    onClick={() => setShowManualKeyEdit(!showManualKeyEdit)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg shadow-2xs transition-colors"
                   >
-                    <RefreshCw className={`w-3 h-3 ${regeneratingKeys ? "animate-spin" : ""}`} />
-                    <span>Regenerér nøgler</span>
+                    <Edit2 className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{showManualKeyEdit ? "Skjul Editor" : "Redigér / Indsæt Nøgler"}</span>
                   </button>
                   <button
+                    type="button"
+                    onClick={handleRegenerateKeys}
+                    disabled={regeneratingKeys}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg shadow-2xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${regeneratingKeys ? "animate-spin" : ""}`} />
+                    <span>Regenerér (4096-bit)</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => {
-                      if (credStatus?.publicKey) {
-                        navigator.clipboard.writeText(credStatus.publicKey);
+                      const textToCopy = keyDisplayMode === "crt" ? credStatus?.certificate : credStatus?.publicKey;
+                      if (textToCopy) {
+                        navigator.clipboard.writeText(textToCopy);
                         setCopiedKey(true);
                         setTimeout(() => setCopiedKey(false), 3000);
                       }
                     }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-md shadow-2xs"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors"
                   >
-                    {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
-                    <span>{copiedKey ? "Kopieret!" : "Kopiér Nøgle"}</span>
+                    {copiedKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedKey ? "Kopieret!" : keyDisplayMode === "crt" ? "Kopiér Certifikat" : "Kopiér Nøgle"}</span>
                   </button>
                 </div>
               </div>
-              <pre className="text-[11px] font-mono bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto max-h-28">
-                {credStatus?.publicKey || "Genererer nøgler..."}
-              </pre>
+
+              {/* Code Preview */}
+              {!showManualKeyEdit ? (
+                <div className="relative">
+                  <pre className="text-[11px] font-mono bg-slate-900 text-slate-100 p-3.5 rounded-xl overflow-x-auto max-h-36 leading-relaxed select-all">
+                    {keyDisplayMode === "crt"
+                      ? (credStatus?.certificate || "Ingen public.crt fundet endnu...")
+                      : (credStatus?.publicKey || "Ingen public.key fundet endnu...")}
+                  </pre>
+                  <div className="text-[11px] text-slate-500 mt-1.5 flex items-center justify-between">
+                    <span>
+                      {keyDisplayMode === "crt"
+                        ? "Dette er det selvsignerede X.509 certifikat, som du indsætter i Enable Banking kontrolpanelet under Trin 5."
+                        : "Dette er den rå offentlige SPKI RSA-nøgle."}
+                    </span>
+                    <span className="font-mono text-slate-400">4096-bit RSA</span>
+                  </div>
+                </div>
+              ) : (
+                /* Manual Key Editor Form */
+                <form onSubmit={handleSaveManualKeys} className="p-4 bg-white rounded-xl border border-blue-200 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase">Manuel Nøgleeditor</h4>
+                    <span className="text-[11px] text-slate-500">Indsæt eller redigér dine nøgler direkte</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                        Offentligt Certifikat (public.crt)
+                      </label>
+                      <textarea
+                        rows={4}
+                        placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                        value={manualCertificate}
+                        onChange={(e) => setManualCertificate(e.target.value)}
+                        className="w-full p-2.5 text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                        Offentlig Nøgle (public.key)
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="-----BEGIN PUBLIC KEY-----&#10;...&#10;-----END PUBLIC KEY-----"
+                        value={manualPublicKey}
+                        onChange={(e) => setManualPublicKey(e.target.value)}
+                        className="w-full p-2.5 text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                        Privat Nøgle (private.key) — <span className="text-amber-600 font-normal">Udfyld kun hvis du vil overskrive den lokale private nøgle</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="-----BEGIN PRIVATE KEY----- / -----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                        value={manualPrivateKey}
+                        onChange={(e) => setManualPrivateKey(e.target.value)}
+                        className="w-full p-2.5 text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowManualKeyEdit(false)}
+                      className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800"
+                    >
+                      Annullér
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingManualKeys}
+                      className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors"
+                    >
+                      {savingManualKeys ? "Gemmer..." : manualKeysSaved ? "Gemt!" : "Gem Nøglefiler"}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
 
             {/* Credentials Form */}
