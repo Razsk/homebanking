@@ -232,12 +232,14 @@ function TransactionsContent() {
     }
   };
 
-  const formatDKK = (amount: number) => {
+  const formatDKK = (amount: number | string | undefined | null) => {
+    const num = typeof amount === "number" ? amount : parseFloat(String(amount || 0));
+    if (isNaN(num)) return "0,00 kr.";
     return new Intl.NumberFormat("da-DK", {
       style: "currency",
       currency: "DKK",
       maximumFractionDigits: 2,
-    }).format(amount);
+    }).format(num);
   };
 
   return (
@@ -458,11 +460,11 @@ function TransactionsContent() {
                   </th>
                   <th className="py-3 px-4">Dato</th>
                   <th className="py-3 px-4">Beskrivelse / Modpart</th>
-                  <th className="py-3 px-4">Konto</th>
-                  <th className="py-3 px-4">Hurtig Kategori</th>
-                  <th className="py-3 px-4 text-center">Abonnement</th>
                   <th className="py-3 px-4 text-right">Beløb</th>
-                  <th className="py-3 px-4 text-right">Opret Regel</th>
+                  <th className="py-3 px-4">Hurtig Kategori</th>
+                  <th className="py-3 px-4">Konto</th>
+                  <th className="py-3 px-4 text-center">Fast</th>
+                  <th className="py-3 px-4 text-right">Regel</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -510,9 +512,16 @@ function TransactionsContent() {
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-500">
-                        <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-medium">
-                          {tx.account?.customName || tx.account?.name || "Konto"}
+                      {/* Prominent Amount Column */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <span
+                          className={`font-extrabold text-sm font-mono px-2.5 py-1 rounded-lg inline-block ${
+                            isPos
+                              ? "text-emerald-700 bg-emerald-50 border border-emerald-200"
+                              : "text-slate-900 bg-slate-100/90 border border-slate-200/80"
+                          }`}
+                        >
+                          {isPos ? "+" : ""}{formatDKK(tx.amount)}
                         </span>
                       </td>
 
@@ -538,6 +547,12 @@ function TransactionsContent() {
                         </div>
                       </td>
 
+                      <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-500">
+                        <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-medium">
+                          {tx.account?.customName || tx.account?.name || "Konto"}
+                        </span>
+                      </td>
+
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         <button
                           onClick={() => handleToggleSubscription(tx.id, tx.isSubscription)}
@@ -552,19 +567,13 @@ function TransactionsContent() {
                         </button>
                       </td>
 
-                      <td className={`py-3.5 px-4 text-right whitespace-nowrap font-bold ${
-                        isPos ? "text-emerald-600" : "text-slate-900"
-                      }`}>
-                        {isPos ? "+" : ""}{formatDKK(tx.amount)}
-                      </td>
-
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <button
                           onClick={() => openCreateRule(tx)}
                           className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
                         >
                           <PlusCircle className="w-3.5 h-3.5" />
-                          <span>Ny regel</span>
+                          <span>Regel</span>
                         </button>
                       </td>
                     </tr>
