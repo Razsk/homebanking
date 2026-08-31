@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
@@ -58,11 +58,20 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const { id, status } = body;
+    const { id, status, categoryId, amount, interval, name, nextPaymentDate } = body;
+
+    const data: any = {};
+    if (status !== undefined) data.status = status;
+    if (categoryId !== undefined) data.categoryId = categoryId ? categoryId : null;
+    if (amount !== undefined) data.amount = parseFloat(amount);
+    if (interval !== undefined) data.interval = interval;
+    if (name !== undefined) data.name = name;
+    if (nextPaymentDate !== undefined) data.nextPaymentDate = new Date(nextPaymentDate);
 
     const sub = await prisma.subscription.update({
       where: { id },
-      data: { status },
+      data,
+      include: { category: true },
     });
 
     return NextResponse.json(sub);
