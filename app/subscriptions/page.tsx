@@ -579,32 +579,46 @@ export default function SubscriptionsPage() {
                         </div>
                       </div>
 
-                      {/* Price Change Detection Indicator */}
+                      {/* Price Change Detection Indicator with Start Date */}
                       {sub.priceChange?.hasChanged && (
                         <div
-                          className={`mt-2.5 flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                          className={`mt-2.5 rounded-lg text-xs font-semibold p-2 space-y-1.5 ${
                             sub.priceChange.isIncrease
-                              ? "bg-rose-100/70 text-rose-800 border border-rose-200"
-                              : "bg-emerald-100/70 text-emerald-800 border border-emerald-200"
+                              ? "bg-rose-100/70 text-rose-900 border border-rose-200"
+                              : "bg-emerald-100/70 text-emerald-900 border border-emerald-200"
                           }`}
-                          title={`Tidligere pris: ${formatDKK(sub.priceChange.previousAmount)} ➔ Nuværende pris: ${formatDKK(sub.priceChange.currentAmount)}`}
                         >
-                          <div className="flex items-center gap-1.5">
-                            {sub.priceChange.isIncrease ? (
-                              <TrendingUp className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                            ) : (
-                              <TrendingDown className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            )}
-                            <span>
-                              {sub.priceChange.isIncrease ? "Prisstigning:" : "Prisfald:"}{" "}
-                              {sub.priceChange.isIncrease ? "+" : ""}
-                              {formatDKK(sub.priceChange.diff)} ({sub.priceChange.isIncrease ? "+" : ""}
-                              {sub.priceChange.percentage}%)
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 font-bold">
+                              {sub.priceChange.isIncrease ? (
+                                <TrendingUp className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                              ) : (
+                                <TrendingDown className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              )}
+                              <span>
+                                {sub.priceChange.isIncrease ? "Prisstigning:" : "Prisfald:"}{" "}
+                                {sub.priceChange.isIncrease ? "+" : ""}
+                                {formatDKK(sub.priceChange.diff)} ({sub.priceChange.isIncrease ? "+" : ""}
+                                {sub.priceChange.percentage}%)
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-600 font-mono">
+                              {formatDKK(sub.priceChange.previousAmount)} ➔ {formatDKK(sub.priceChange.currentAmount)}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-600 font-mono">
-                            {formatDKK(sub.priceChange.previousAmount)} ➔ {formatDKK(sub.priceChange.currentAmount)}
-                          </span>
+
+                          {sub.priceChange.effectiveDate && (
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-600 font-normal">
+                              <span>Gældende fra:</span>
+                              <span className="font-semibold text-slate-800 font-mono text-[10px]">
+                                {new Intl.DateTimeFormat("da-DK", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                }).format(new Date(sub.priceChange.effectiveDate))}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -72,6 +72,17 @@ export async function GET() {
         const percentage = Math.round(((lastAmount - firstAmount) / firstAmount) * 1000) / 10;
 
         if (Math.abs(diff) >= 1) {
+          // Find the earliest transaction in the latest price block
+          let changeTxIndex = matchedTxs.length - 1;
+          for (let i = matchedTxs.length - 1; i >= 0; i--) {
+            if (Math.abs(Math.abs(matchedTxs[i].amount) - lastAmount) < 0.5) {
+              changeTxIndex = i;
+            } else {
+              break;
+            }
+          }
+          const effectiveDate = matchedTxs[changeTxIndex]?.date || matchedTxs[matchedTxs.length - 1].date;
+
           priceChange = {
             hasChanged: true,
             isIncrease: diff > 0,
@@ -79,6 +90,7 @@ export async function GET() {
             currentAmount: lastAmount,
             diff,
             percentage,
+            effectiveDate,
           };
           latestAmount = lastAmount;
         }
