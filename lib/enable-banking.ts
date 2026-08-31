@@ -45,11 +45,12 @@ export class EnableBankingClient {
 
   public isConfigured(): boolean {
     const keyPath = path.resolve(this.config.privateKeyPath);
+    const effectiveKeyId = this.config.keyId || this.config.appId;
     return Boolean(
       this.config.appId && 
       this.config.appId.trim() !== "" && 
-      this.config.keyId && 
-      this.config.keyId.trim() !== "" && 
+      effectiveKeyId && 
+      effectiveKeyId.trim() !== "" && 
       fs.existsSync(keyPath)
     );
   }
@@ -61,12 +62,12 @@ export class EnableBankingClient {
     return {
       isConfigured: this.isConfigured(),
       hasAppId: Boolean(this.config.appId && this.config.appId.trim() !== ""),
-      hasKeyId: Boolean(this.config.keyId && this.config.keyId.trim() !== ""),
+      hasKeyId: Boolean((this.config.keyId || this.config.appId) && (this.config.keyId || this.config.appId).trim() !== ""),
       hasPrivateKey: fs.existsSync(keyPath),
       hasPublicKey: fs.existsSync(pubPath),
       publicKey: fs.existsSync(pubPath) ? fs.readFileSync(pubPath, "utf8") : null,
       appId: this.config.appId ? `${this.config.appId.slice(0, 4)}...${this.config.appId.slice(-4)}` : "",
-      keyId: this.config.keyId || "",
+      keyId: this.config.keyId || this.config.appId || "",
       redirectUrl: this.config.redirectUrl,
     };
   }
@@ -82,16 +83,19 @@ export class EnableBankingClient {
     const privateKey = fs.readFileSync(resolvedPath, "utf8");
     const now = Math.floor(Date.now() / 1000);
 
+    // Official Enable Banking JWT format:
+    // Header: { "typ": "JWT", "alg": "RS256", "kid": "<application_id>" }
+    // Payload: { "iss": "enablebanking.com", "aud": "api.enablebanking.com", "iat": now, "exp": now + 3600 }
     const payload = {
-      iss: this.config.appId,
-      aud: "https://api.enablebanking.com",
+      iss: "enablebanking.com",
+      aud: "api.enablebanking.com",
       iat: now,
-      exp: now + 3600, // 1 time levetid
+      exp: now + 3600, // 1 hour TTL (max allowed by Enable Banking is 24 hours)
     };
 
     return jwt.sign(payload, privateKey, {
       algorithm: "RS256",
-      keyid: this.config.keyId,
+      keyid: this.config.keyId || this.config.appId,
     });
   }
 
