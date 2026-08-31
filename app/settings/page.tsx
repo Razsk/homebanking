@@ -21,8 +21,33 @@ import {
   Database, 
   FileSpreadsheet, 
   FileJson, 
-  Layers 
+  Layers,
+  Palette,
+  X,
+  ExternalLink
 } from "lucide-react";
+import Link from "next/link";
+
+const PRESET_COLORS = [
+  "#3b82f6", // Blue
+  "#6366f1", // Indigo
+  "#8b5cf6", // Purple
+  "#a855f7", // Violet
+  "#ec4899", // Pink
+  "#ef4444", // Red
+  "#f43f5e", // Rose
+  "#f97316", // Orange
+  "#f59e0b", // Amber
+  "#eab308", // Yellow
+  "#10b981", // Emerald
+  "#059669", // Dark Emerald
+  "#14b8a6", // Teal
+  "#06b6d4", // Cyan
+  "#0284c7", // Sky
+  "#84cc16", // Lime
+  "#64748b", // Slate
+  "#334155", // Dark Slate
+];
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"bank" | "accounts" | "categories" | "rules" | "subs" | "data">("bank");
@@ -62,10 +87,17 @@ export default function SettingsPage() {
   const [savingManualKeys, setSavingManualKeys] = useState(false);
   const [manualKeysSaved, setManualKeysSaved] = useState(false);
 
-  // Category modal / form
+  // Category creation & editing state
   const [newCatName, setNewCatName] = useState("");
   const [newCatColor, setNewCatColor] = useState("#3b82f6");
   const [newCatIsIncome, setNewCatIsIncome] = useState(false);
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [editCatName, setEditCatName] = useState("");
+  const [editCatColor, setEditCatColor] = useState("#3b82f6");
+  const [editCatIsIncome, setEditCatIsIncome] = useState(false);
+  const [colorPickerOpenCatId, setColorPickerOpenCatId] = useState<string | null>(null);
+  const [catSearch, setCatSearch] = useState("");
+  const [catFilter, setCatFilter] = useState<"all" | "expense" | "income">("all");
 
   // Rule form
   const [rulePattern, setRulePattern] = useState("");
@@ -240,10 +272,10 @@ export default function SettingsPage() {
     e.preventDefault();
     if (!newCatName.trim()) return;
     try {
-      const res = await fetch("/api/settings/categories", {
+      const res = await fetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCatName, color: newCatColor, isIncome: newCatIsIncome }),
+        body: JSON.stringify({ name: newCatName.trim(), color: newCatColor, isIncome: newCatIsIncome }),
       });
       if (res.ok) {
         setNewCatName("");
@@ -254,10 +286,66 @@ export default function SettingsPage() {
     }
   };
 
+  const handleStartEditCategory = (cat: any) => {
+    setEditingCatId(cat.id);
+    setEditCatName(cat.name);
+    setEditCatColor(cat.color || "#3b82f6");
+    setEditCatIsIncome(Boolean(cat.isIncome));
+    setColorPickerOpenCatId(null);
+  };
+
+  const handleCancelEditCategory = () => {
+    setEditingCatId(null);
+    setColorPickerOpenCatId(null);
+  };
+
+  const handleSaveCategory = async (catId: string) => {
+    if (!editCatName.trim()) return;
+    try {
+      const res = await fetch("/api/categories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: catId,
+          name: editCatName.trim(),
+          color: editCatColor,
+          isIncome: editCatIsIncome,
+        }),
+      });
+      if (res.ok) {
+        setEditingCatId(null);
+        loadAllData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleQuickColorChange = async (cat: any, newColor: string) => {
+    try {
+      const res = await fetch("/api/categories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: cat.id,
+          name: cat.name,
+          color: newColor,
+          isIncome: cat.isIncome,
+        }),
+      });
+      if (res.ok) {
+        setColorPickerOpenCatId(null);
+        loadAllData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleDeleteCategory = async (id: string) => {
     if (!confirm("Slet denne kategori? Tilknyttede poster flyttes til 'Andet / Diverse'.")) return;
     try {
-      const res = await fetch(`/api/settings/categories?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/categories?id=${id}`, { method: "DELETE" });
       if (res.ok) loadAllData();
     } catch (e) {
       console.error(e);
@@ -848,60 +936,96 @@ export default function SettingsPage() {
       {/* TAB 3: CATEGORIES MANAGEMENT */}
       {activeTab === "categories" && (
         <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
             <div>
               <h3 className="font-bold text-slate-900 text-base">Kategoristyring</h3>
-              <p className="text-xs text-slate-400">Opret, redigér farver og tilpas dine forbrugskategorier</p>
+              <p className="text-xs text-slate-400">
+                Opret nye kategorier, omdøb eksisterende, og tilpas farver for et skarpt budgetoverblik
+              </p>
             </div>
-            <span className="text-xs font-medium text-slate-500">{categories.length} kategorier</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg">
+                {categories.length} kategorier i alt
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200/60">
+                {categories.filter((c) => c.isIncome).length} indtægt
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg border border-purple-200/60">
+                {categories.filter((c) => !c.isIncome).length} udgift
+              </span>
+            </div>
           </div>
 
           {/* Add Category Form */}
-          <form onSubmit={handleCreateCategory} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Opret Ny Kategori</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Kategorinavn</label>
+          <form onSubmit={handleCreateCategory} className="p-5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-blue-600" />
+                <span>Opret Ny Kategori</span>
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+              <div className="md:col-span-4">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Kategorinavn
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="f.eks. Børn & Skole, Hobby"
+                  placeholder="f.eks. Børn & Skole, Hobby, Kæledyr"
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs font-medium"
                 />
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Farve</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={newCatColor}
-                    onChange={(e) => setNewCatColor(e.target.value)}
-                    className="w-10 h-9 p-0.5 rounded border border-slate-300 cursor-pointer bg-white"
-                  />
-                  <span className="text-xs font-mono text-slate-500">{newCatColor}</span>
+              <div className="md:col-span-5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1.5">
+                  Vælg Farve
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {PRESET_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setNewCatColor(color)}
+                      className={`w-6 h-6 rounded-full transition-transform cursor-pointer border border-white shadow-2xs ${
+                        newCatColor.toLowerCase() === color.toLowerCase()
+                          ? "scale-125 ring-2 ring-slate-900 ring-offset-1"
+                          : "hover:scale-110 opacity-90 hover:opacity-100"
+                      }`}
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    />
+                  ))}
+                  <div className="flex items-center gap-1 ml-1">
+                    <input
+                      type="color"
+                      value={newCatColor}
+                      onChange={(e) => setNewCatColor(e.target.value)}
+                      className="w-6 h-6 p-0 rounded-full border border-slate-300 cursor-pointer bg-transparent"
+                      title="Vælg brugerdefineret farve"
+                    />
+                    <span className="text-[10px] font-mono text-slate-500">{newCatColor}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col justify-end">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="md:col-span-3 flex items-center justify-between gap-3">
+                <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-xl border border-slate-200 select-none shadow-2xs">
                   <input
                     type="checkbox"
-                    id="catIsIncCheck"
                     checked={newCatIsIncome}
                     onChange={(e) => setNewCatIsIncome(e.target.checked)}
                     className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
                   />
-                  <label htmlFor="catIsIncCheck" className="text-xs font-medium text-slate-700">
-                    Er Indtægt
-                  </label>
-                </div>
+                  <span className="text-xs font-semibold text-slate-700">Er Indtægt</span>
+                </label>
 
                 <button
                   type="submit"
-                  className="w-full py-2 px-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1.5"
+                  className="py-2 px-4 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 shrink-0"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Tilføj Kategori</span>
@@ -910,35 +1034,275 @@ export default function SettingsPage() {
             </div>
           </form>
 
-          {/* Categories Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {categories.map((cat) => (
-              <div
-                key={cat.id}
-                className="p-3.5 rounded-xl border border-slate-200 flex items-center justify-between hover:bg-slate-50/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-4 h-4 rounded-full shrink-0"
-                    style={{ backgroundColor: cat.color }}
-                  />
-                  <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">{cat.name}</h4>
-                    <span className="text-[11px] text-slate-400">
-                      {cat.isIncome ? "Indtægt" : "Udgift"} • {cat._count?.transactions || 0} poster
-                    </span>
-                  </div>
-                </div>
+          {/* Search & Filter Categories Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-2 flex-1 max-w-sm">
+              <input
+                type="text"
+                placeholder="Filtrér kategorier..."
+                value={catSearch}
+                onChange={(e) => setCatSearch(e.target.value)}
+                className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
 
-                <button
-                  onClick={() => handleDeleteCategory(cat.id)}
-                  className="p-1 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded"
-                  title="Slet kategori"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold">
+              <button
+                onClick={() => setCatFilter("all")}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  catFilter === "all" ? "bg-white text-slate-900 shadow-2xs font-bold" : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Alle ({categories.length})
+              </button>
+              <button
+                onClick={() => setCatFilter("expense")}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  catFilter === "expense" ? "bg-white text-purple-700 shadow-2xs font-bold" : "text-slate-500 hover:text-purple-700"
+                }`}
+              >
+                Udgifter ({categories.filter((c) => !c.isIncome).length})
+              </button>
+              <button
+                onClick={() => setCatFilter("income")}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  catFilter === "income" ? "bg-white text-emerald-700 shadow-2xs font-bold" : "text-slate-500 hover:text-emerald-700"
+                }`}
+              >
+                Indtægter ({categories.filter((c) => c.isIncome).length})
+              </button>
+            </div>
+          </div>
+
+          {/* Categories Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {categories
+              .filter((cat) => {
+                if (catSearch) {
+                  const q = catSearch.toLowerCase();
+                  if (!cat.name.toLowerCase().includes(q)) return false;
+                }
+                if (catFilter === "expense" && cat.isIncome) return false;
+                if (catFilter === "income" && !cat.isIncome) return false;
+                return true;
+              })
+              .map((cat) => {
+                const isEditing = editingCatId === cat.id;
+                const isColorPickerOpen = colorPickerOpenCatId === cat.id;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={cat.id}
+                      className="p-4 rounded-2xl border-2 border-blue-400 bg-blue-50/30 shadow-md space-y-3 transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-blue-900 uppercase">
+                          ✏️ Redigér & Omdøb Kategori
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCategory(cat.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Gem</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditCategory}
+                            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded-lg transition-colors"
+                            title="Annuller redigering"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Name input */}
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
+                          Nyt Navn
+                        </label>
+                        <input
+                          type="text"
+                          value={editCatName}
+                          onChange={(e) => setEditCatName(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                          autoFocus
+                        />
+                      </div>
+
+                      {/* Color Palette Selector */}
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
+                          Vælg Farve
+                        </label>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {PRESET_COLORS.map((color) => (
+                            <button
+                              key={color}
+                              type="button"
+                              onClick={() => setEditCatColor(color)}
+                              className={`w-5 h-5 rounded-full transition-transform cursor-pointer border border-white ${
+                                editCatColor.toLowerCase() === color.toLowerCase()
+                                  ? "scale-125 ring-2 ring-slate-900 ring-offset-1"
+                                  : "hover:scale-110 opacity-80 hover:opacity-100"
+                              }`}
+                              style={{ backgroundColor: color }}
+                              title={color}
+                            />
+                          ))}
+                          <input
+                            type="color"
+                            value={editCatColor}
+                            onChange={(e) => setEditCatColor(e.target.value)}
+                            className="w-5 h-5 p-0 rounded-full border border-slate-300 cursor-pointer bg-transparent"
+                            title="Vælg brugerdefineret farve"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Income / Expense Toggle */}
+                      <div className="pt-1 flex items-center justify-between">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={editCatIsIncome}
+                            onChange={(e) => setEditCatIsIncome(e.target.checked)}
+                            className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                          />
+                          <span>Markér som indtægtskategori</span>
+                        </label>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={cat.id}
+                    className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm transition-all space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        {/* Interactive Color Circle */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setColorPickerOpenCatId(isColorPickerOpen ? null : cat.id)}
+                            className="w-5 h-5 rounded-full shadow-2xs transition-transform hover:scale-125 cursor-pointer ring-2 ring-offset-1 ring-slate-100 hover:ring-slate-400"
+                            style={{ backgroundColor: cat.color || "#3b82f6" }}
+                            title="Klik for hurtigt at skifte farve"
+                          />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-slate-900 text-sm">{cat.name}</h4>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                cat.isIncome
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : "bg-slate-100 text-slate-600 border border-slate-200"
+                              }`}
+                            >
+                              {cat.isIncome ? "Indtægt" : "Udgift"}
+                            </span>
+                          </div>
+                          
+                          {/* Usage Counts */}
+                          <div className="flex items-center gap-3 text-xs text-slate-500 font-medium mt-1">
+                            <span>📄 {cat._count?.transactions || 0} poster</span>
+                            {cat._count?.subscriptions > 0 && (
+                              <span className="text-purple-600 font-semibold">
+                                🔁 {cat._count?.subscriptions} {cat._count?.subscriptions === 1 ? "abonnement" : "abonnementer"}
+                              </span>
+                            )}
+                            {cat._count?.rules > 0 && (
+                              <span className="text-blue-600 font-semibold">
+                                ⚡ {cat._count?.rules} {cat._count?.rules === 1 ? "regel" : "regler"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Quick Color Palette Button */}
+                        <button
+                          onClick={() => setColorPickerOpenCatId(isColorPickerOpen ? null : cat.id)}
+                          className={`p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors ${
+                            isColorPickerOpen ? "bg-slate-100 text-slate-900 ring-1 ring-slate-300" : ""
+                          }`}
+                          title="Hurtig farveskift"
+                        >
+                          <Palette className="w-4 h-4" />
+                        </button>
+
+                        {/* Rename / Edit Button */}
+                        <button
+                          onClick={() => handleStartEditCategory(cat)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="Omdøb og redigér kategori"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+
+                        {/* View transactions in this category */}
+                        <Link
+                          href={`/transactions?categoryId=${cat.id}`}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                          title="Se alle posteringer i denne kategori"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Link>
+
+                        {/* Delete Button */}
+                        {cat.name !== "Andet / Diverse" && (
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="p-1.5 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title={`Slet kategori (${cat._count?.transactions || 0} poster flyttes til 'Andet / Diverse')`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quick Color Picker Swatch Popover */}
+                    {isColorPickerOpen && (
+                      <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-1.5 animate-in fade-in">
+                        <span className="text-[11px] font-semibold text-slate-500 mr-1">Vælg ny farve:</span>
+                        {PRESET_COLORS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => handleQuickColorChange(cat, color)}
+                            className={`w-5 h-5 rounded-full transition-transform cursor-pointer border border-white shadow-2xs ${
+                              (cat.color || "#3b82f6").toLowerCase() === color.toLowerCase()
+                                ? "scale-125 ring-2 ring-slate-900 ring-offset-1"
+                                : "hover:scale-110 opacity-85 hover:opacity-100"
+                            }`}
+                            style={{ backgroundColor: color }}
+                            title={`Skift farve til ${color}`}
+                          />
+                        ))}
+                        <input
+                          type="color"
+                          value={cat.color || "#3b82f6"}
+                          onChange={(e) => handleQuickColorChange(cat, e.target.value)}
+                          className="w-5 h-5 p-0 rounded-full border border-slate-300 cursor-pointer bg-transparent ml-1"
+                          title="Vælg brugerdefineret farve"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
