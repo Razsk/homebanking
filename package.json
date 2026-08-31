@@ -12,7 +12,8 @@
     "generate-keys": "node scripts/generate-keys.js",
     "reset-data": "node scripts/reset-data.js",
     "build:dist": "python scripts/build_dist.py",
-    "deploy:public": "python scripts/deploy_dist.py"
+    "deploy:public": "python scripts/deploy_dist.py",
+    "clean": "node -e \"const fs = require('fs'); if (fs.existsSync('.next')) fs.rmSync('.next', { recursive: true, force: true }); console.log('.next cache cleared!');\""
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
