@@ -2,18 +2,20 @@
   "version": 1,
   "errors": [
     {
-      "id": "err_1788204842073_l1d6c",
-      "fingerprint": "cec39b5fbed139ce",
-      "name": "TypeError",
-      "message": "Cannot read properties of undefined",
-      "normalizedMessage": "Cannot read properties of undefined",
-      "source": "api",
-      "route": "/api/sync",
-      "status": "unresolved",
+      "id": "err_1788204909675_w6a9c",
+      "fingerprint": "fa990a1db4d4b764",
+      "name": "PrismaClientValidationError",
+      "message": "Missing required argument: data.amount",
+      "normalizedMessage": "Missing required argument: data.amount",
+      "source": "server",
+      "route": "/api/transactions",
+      "status": "resolved",
       "occurrenceCount": 1,
-      "firstSeenAt": "2026-08-31T19:34:02.073Z",
-      "lastSeenAt": "2026-08-31T19:34:02.073Z",
-      "fixAttempts": 0
+      "firstSeenAt": "2026-08-31T19:35:09.675Z",
+      "lastSeenAt": "2026-08-31T19:35:09.675Z",
+      "fixAttempts": 0,
+      "lastFixedAt": "2026-08-31T19:35:09.846Z",
+      "resolutionNote": "Added fallback amount check"
     }
   ]
 }

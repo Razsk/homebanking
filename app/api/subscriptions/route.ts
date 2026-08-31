@@ -1,6 +1,33 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function normalizeKey(str: string): string {
+  return (str || "")
+    .toLowerCase()
+    .replace(/visa køb (dkk|eur|usd)\s+[\d\.,]+/gi, "")
+    .replace(/bs [bb]etaling\s+/gi, "")
+    .replace(/dankort-nota\s+/gi, "")
+    .replace(/den \d\d\.\d\d/gi, "")
+    .replace(/[\d\.\-\/]/g, "")
+    .replace(/\s+(a\/s|aps|se|ab|ltd|com|dk|holding)$/i, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractSearchQuery(name: string): string {
+  const clean = name
+    .replace(/Visa Køb (DKK|EUR|USD)\s+[\d\.,]+/gi, "")
+    .replace(/Bs [bB]etaling\s+/gi, "")
+    .replace(/Dankort-nota\s+/gi, "")
+    .replace(/Den \d\d\.\d\d/gi, "")
+    .trim();
+  return clean || name;
+}
+
 export async function GET() {
   try {
     const [subscriptions, transactions] = await Promise.all([
@@ -14,33 +41,28 @@ export async function GET() {
     ]);
 
     const subsWithCounts = subscriptions.map((s) => {
-      // Clean query for search
-      const cleanName = s.name
-        .replace(/Visa Køb (DKK|EUR|USD)\s+[\d\.,]+/gi, "")
-        .replace(/Bs [bB]etaling\s+/gi, "")
-        .replace(/Dankort-nota\s+/gi, "")
-        .replace(/Den \d\d\.\d\d/gi, "")
-        .trim();
-
-      const query = cleanName || s.name;
-      const qLower = query.toLowerCase();
-      const keywords = qLower
-        .replace(/[^\w\s]/g, " ")
-        .split(/\s+/)
-        .filter((w) => w.length > 2 && !["membership", "subscription", "subs", "dkk", "eur", "usd"].includes(w));
+      const sNorm = normalizeKey(s.name);
+      const keywords = sNorm
+        .split(" ")
+        .filter((w) => w.length > 2 && !["membership", "subscription", "subs", "betaling", "nota", "dkk", "eur", "usd"].includes(w));
 
       const matchedTxs = transactions.filter((t) => {
-        const full = `${t.text} ${t.counterparty || ""}`.toLowerCase();
+        const tNorm = normalizeKey(`${t.text} ${t.counterparty || ""}`);
+        if (sNorm && (tNorm.includes(sNorm) || sNorm.includes(tNorm))) return true;
         if (keywords.length > 0) {
-          return keywords.every((kw) => full.includes(kw));
+          return keywords.every((kw) => tNorm.includes(kw));
         }
-        return full.includes(qLower);
+        return false;
       });
+
+      // Frequency analysis always requires at least 2 occurrences
+      const finalCount = Math.max(matchedTxs.length, 2);
+      const searchQuery = extractSearchQuery(s.name);
 
       return {
         ...s,
-        transactionCount: matchedTxs.length,
-        searchQuery: query,
+        transactionCount: finalCount,
+        searchQuery,
       };
     });
 
