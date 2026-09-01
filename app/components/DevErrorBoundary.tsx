@@ -17,8 +17,13 @@ async function reportErrorToDevApi(data: {
   stack?: string;
   source: string;
   route?: string;
+  metadata?: Record<string, any>;
 }) {
-  if (process.env.NODE_ENV !== 'development' && typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+  if (
+    process.env.NODE_ENV !== 'development' &&
+    typeof window !== 'undefined' &&
+    !window.location.hostname.includes('localhost')
+  ) {
     return;
   }
 
@@ -37,17 +42,46 @@ async function reportErrorToDevApi(data: {
 }
 
 /**
- * Global window listeners for uncaught errors and unhandled promise rejections in dev.
+ * Global window listeners with capture=true to catch uncaught JS errors,
+ * unhandled promise rejections, AND resource load errors (e.g. script 500s).
  */
 function GlobalDevErrorListener() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
 
-    const handleWindowError = (event: ErrorEvent) => {
+    const handleWindowError = (event: Event | ErrorEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isResource =
+        target &&
+        (target.tagName === 'SCRIPT' ||
+          target.tagName === 'LINK' ||
+          target.tagName === 'IMG' ||
+          target.tagName === 'SOURCE');
+
+      if (isResource) {
+        const src =
+          (target as HTMLScriptElement).src ||
+          (target as HTMLLinkElement).href ||
+          '';
+
+        if (!src) return;
+
+        reportErrorToDevApi({
+          name: 'ResourceLoadError',
+          message: `Failed to load resource: ${src} (Server Responded with Error)`,
+          stack: `Resource load failed on element <${target.tagName.toLowerCase()}> at ${src}`,
+          source: 'build',
+          route: window.location.pathname,
+          metadata: { resourceUrl: src, tagName: target.tagName }
+        });
+        return;
+      }
+
+      const errEvent = event as ErrorEvent;
       reportErrorToDevApi({
-        name: event.error?.name || 'UncaughtError',
-        message: event.message || 'Unknown window error',
-        stack: event.error?.stack,
+        name: errEvent.error?.name || 'UncaughtError',
+        message: errEvent.message || 'Unknown window error',
+        stack: errEvent.error?.stack,
         source: 'client',
         route: window.location.pathname
       });
@@ -64,11 +98,12 @@ function GlobalDevErrorListener() {
       });
     };
 
-    window.addEventListener('error', handleWindowError);
+    // Use capture phase (true) so resource errors on <script>/<link> elements are captured
+    window.addEventListener('error', handleWindowError, true);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     return () => {
-      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('error', handleWindowError, true);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
