@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { buildTransactionWhereClause } from "@/lib/transaction-queries";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,33 +19,12 @@ export async function GET(req: Request) {
     const isUnlimited = limitParam === "0" || limitParam === "all";
     const limit = isUnlimited ? 0 : parseInt(limitParam || "100", 10);
 
-    const where: any = {};
-    if (accountId) where.accountId = accountId;
-    if (categoryId) where.categoryId = categoryId;
-    if (isSubscription === "true") where.isSubscription = true;
-    if (search && search.trim()) {
-      const words = search
-        .trim()
-        .split(/\s+/)
-        .filter((w) => w.length > 0);
-
-      const noise = ["bs", "betaling", "køb", "visa", "dankort", "den", "nota", "dkk", "eur", "usd", "sek", "nok", "aps", "a/s", "ab", "se"];
-      const significantWords = words.filter(
-        (w) => !noise.includes(w.toLowerCase())
-      );
-
-      const merchantWords = significantWords.filter((w) => !/^[\d\.,]+$/.test(w));
-      const filterWords = merchantWords.length > 0 
-        ? merchantWords 
-        : (significantWords.length > 0 ? significantWords : words);
-
-      where.AND = filterWords.map((w) => ({
-        OR: [
-          { text: { contains: w } },
-          { counterparty: { contains: w } },
-        ],
-      }));
-    }
+    const where = buildTransactionWhereClause({
+      accountId,
+      categoryId,
+      search,
+      isSubscription,
+    });
 
     const totalCount = await prisma.transaction.count({ where });
 
@@ -83,18 +63,29 @@ export async function GET(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const { id, ids, categoryId, isSubscription } = body;
+    const { id, ids, filter, categoryId, isSubscription } = body;
 
-    // Bulk update multiple transactions
+    const updateData: any = {};
+    if (categoryId !== undefined) {
+      updateData.categoryId = categoryId ? categoryId : null;
+    }
+    if (isSubscription !== undefined) {
+      updateData.isSubscription = isSubscription;
+    }
+
+    // Bulk update by filter / search criteria
+    if (filter) {
+      const where = buildTransactionWhereClause(filter);
+      const result = await prisma.transaction.updateMany({
+        where,
+        data: updateData,
+      });
+
+      return NextResponse.json({ success: true, count: result.count });
+    }
+
+    // Bulk update multiple transactions by IDs
     if (Array.isArray(ids) && ids.length > 0) {
-      const updateData: any = {};
-      if (categoryId !== undefined) {
-        updateData.categoryId = categoryId ? categoryId : null;
-      }
-      if (isSubscription !== undefined) {
-        updateData.isSubscription = isSubscription;
-      }
-
       const result = await prisma.transaction.updateMany({
         where: { id: { in: ids } },
         data: updateData,
@@ -104,15 +95,12 @@ export async function PATCH(req: Request) {
     }
 
     if (!id) {
-      return NextResponse.json({ error: "Mangler transaktions-ID" }, { status: 400 });
+      return NextResponse.json({ error: "Mangler transaktions-ID eller filter" }, { status: 400 });
     }
 
     const updated = await prisma.transaction.update({
       where: { id },
-      data: {
-        ...(categoryId !== undefined ? { categoryId: categoryId ? categoryId : null } : {}),
-        ...(isSubscription !== undefined ? { isSubscription } : {}),
-      },
+      data: updateData,
       include: { category: true },
     });
 

@@ -1,6 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
+declare const __non_webpack_require__: any;
 
 export type ErrorStatus = 'unresolved' | 'in_progress' | 'resolved' | 'ignored';
 export type ErrorSource = 'client' | 'server' | 'api' | 'build' | 'test' | 'unknown';
@@ -45,7 +43,29 @@ export interface ErrorStoreData {
   errors: DevErrorRecord[];
 }
 
-const STORE_PATH = path.resolve(process.cwd(), '.dev_errors.json');
+function getNodeModules() {
+  if (typeof window !== 'undefined') {
+    return { fs: null, path: null, crypto: null };
+  }
+  try {
+    const req = typeof __non_webpack_require__ !== 'undefined' ? __non_webpack_require__ : eval('require');
+    return {
+      fs: req('fs'),
+      path: req('path'),
+      crypto: req('crypto')
+    };
+  } catch {
+    return { fs: null, path: null, crypto: null };
+  }
+}
+
+function getStorePath(): string {
+  const { path } = getNodeModules();
+  if (path && typeof process !== 'undefined' && process.cwd) {
+    return path.resolve(process.cwd(), '.dev_errors.json');
+  }
+  return '.dev_errors.json';
+}
 
 /**
  * Normalizes error messages by stripping dynamic parameters (UUIDs, timestamps, IDs, hashes)
@@ -80,7 +100,7 @@ export function extractTopStackFrame(stack?: string): { file?: string; line?: nu
     if (match) {
       const fullPath = match[1];
       const normalizedFull = fullPath.replace(/\\/g, '/');
-      const normalizedCwd = process.cwd().replace(/\\/g, '/');
+      const normalizedCwd = (typeof process !== 'undefined' && process.cwd ? process.cwd() : '').replace(/\\/g, '/');
       const relPath = normalizedFull.replace(normalizedCwd, '').replace(/^\/+/, '');
       return {
         file: relPath,
@@ -115,7 +135,19 @@ export function generateErrorFingerprint(
     frameSummary
   ].join('|');
 
-  const fingerprint = crypto.createHash('sha256').update(hashContent).digest('hex').substring(0, 16);
+  const { crypto } = getNodeModules();
+  let fingerprint = '';
+  if (crypto && crypto.createHash) {
+    fingerprint = crypto.createHash('sha256').update(hashContent).digest('hex').substring(0, 16);
+  } else {
+    // Fallback simple hash for non-crypto environments
+    let hash = 0;
+    for (let i = 0; i < hashContent.length; i++) {
+      hash = ((hash << 5) - hash) + hashContent.charCodeAt(i);
+      hash |= 0;
+    }
+    fingerprint = Math.abs(hash).toString(16).padStart(16, '0').substring(0, 16);
+  }
 
   return {
     fingerprint,
@@ -130,9 +162,12 @@ export function generateErrorFingerprint(
  * Reads the error store from disk safely.
  */
 export function readErrorStore(): ErrorStoreData {
+  const { fs } = getNodeModules();
+  const storePath = getStorePath();
+
   try {
-    if (fs.existsSync(STORE_PATH)) {
-      const raw = fs.readFileSync(STORE_PATH, 'utf-8');
+    if (fs && fs.existsSync(storePath)) {
+      const raw = fs.readFileSync(storePath, 'utf-8');
       const data = JSON.parse(raw);
       if (Array.isArray(data.errors)) {
         return data;
@@ -153,8 +188,13 @@ export function readErrorStore(): ErrorStoreData {
  * Writes the error store to disk safely.
  */
 export function writeErrorStore(data: ErrorStoreData): void {
+  const { fs } = getNodeModules();
+  const storePath = getStorePath();
+
   try {
-    fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+    if (fs) {
+      fs.writeFileSync(storePath, JSON.stringify(data, null, 2), 'utf-8');
+    }
   } catch (err) {
     console.error('[DevErrorTracker] Failed to write error store:', err);
   }
