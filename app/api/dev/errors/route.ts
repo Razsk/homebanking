@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   recordDevError,
   getDevErrors,
+  pollDevErrors,
   updateDevErrorStatus,
   ErrorStatus,
   ErrorSource
@@ -14,16 +15,27 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') as ErrorStatus | 'active' | 'all' | null;
     const source = searchParams.get('source') as ErrorSource | null;
+    const isPoll = searchParams.get('poll') === 'true';
 
-    const result = getDevErrors({
-      status: status || undefined,
-      source: source || undefined
-    });
+    const result = isPoll
+      ? pollDevErrors({
+          status: status || undefined,
+          source: source || undefined
+        })
+      : getDevErrors({
+          status: status || undefined,
+          source: source || undefined
+        });
+
+    const adaptiveAdvice = isPoll && 'adaptivePolling' in result
+      ? result.adaptivePolling
+      : undefined;
 
     return NextResponse.json({
       success: true,
       summary: result.summary,
       counts: result.counts,
+      adaptivePolling: adaptiveAdvice,
       errors: result.errors
     });
   } catch (error: any) {

@@ -7,7 +7,9 @@ import {
   getOneLineStatusSummary,
   getDevErrors,
   resetDevErrorStore,
-  extractTopStackFrame
+  extractTopStackFrame,
+  pollDevErrors,
+  getAdaptivePollAdvice
 } from '../lib/dev-error-tracker';
 
 describe('Dev Error Tracker & Deduplication', () => {
@@ -140,6 +142,80 @@ describe('Dev Error Tracker & Deduplication', () => {
 
       const summary = getOneLineStatusSummary();
       expect(summary).toMatch(/\[Poll @ \d{2}:\d{2}:\d{2}\] 1 unresolved: TypeError in \/api\/sync/);
+    });
+  });
+
+  describe('Adaptive Polling & Frequency Backoff', () => {
+    it('uses active fixing tier (60s) when unresolved errors exist', () => {
+      recordDevError({
+        name: 'TypeError',
+        message: 'Cannot read property id',
+        source: 'api'
+      });
+
+      const advice = getAdaptivePollAdvice();
+      expect(advice.tier).toBe('active_fixing');
+      expect(advice.recommendedIntervalSeconds).toBe(60);
+      expect(advice.shouldStop).toBe(false);
+    });
+
+    it('backs off polling interval through tiers as consecutive clean polls increase', () => {
+      // Clean poll 1 (1st clean poll -> standard tier: 120s)
+      let poll1 = pollDevErrors();
+      expect(poll1.adaptivePolling.tier).toBe('standard');
+      expect(poll1.adaptivePolling.recommendedIntervalSeconds).toBe(120);
+      expect(poll1.adaptivePolling.consecutiveCleanPolls).toBe(1);
+      expect(poll1.adaptivePolling.shouldStop).toBe(false);
+
+      // Simulate 5 clean polls -> low_activity tier (300s)
+      for (let i = 0; i < 4; i++) {
+        pollDevErrors();
+      }
+      let poll5 = pollDevErrors(); // 6 total
+      expect(poll5.adaptivePolling.tier).toBe('low_activity');
+      expect(poll5.adaptivePolling.recommendedIntervalSeconds).toBe(300);
+      expect(poll5.adaptivePolling.shouldStop).toBe(false);
+
+      // Simulate 10 total clean polls -> idle_backoff tier (900s / 15m)
+      for (let i = 0; i < 4; i++) {
+        pollDevErrors();
+      }
+      let poll10 = pollDevErrors(); // 11 total
+      expect(poll10.adaptivePolling.tier).toBe('idle_backoff');
+      expect(poll10.adaptivePolling.recommendedIntervalSeconds).toBe(900);
+      expect(poll10.adaptivePolling.shouldStop).toBe(false);
+
+      // Simulate 16+ clean polls -> hibernating (0s, shouldStop: true)
+      for (let i = 0; i < 6; i++) {
+        pollDevErrors();
+      }
+      let poll16 = pollDevErrors();
+      expect(poll16.adaptivePolling.tier).toBe('hibernating');
+      expect(poll16.adaptivePolling.recommendedIntervalSeconds).toBe(0);
+      expect(poll16.adaptivePolling.shouldStop).toBe(true);
+      expect(poll16.adaptivePolling.reason).toContain('stable');
+    });
+
+    it('resets backoff immediately when a new error occurs after hibernation', () => {
+      // Simulate 20 clean polls (hibernated)
+      for (let i = 0; i < 20; i++) {
+        pollDevErrors();
+      }
+      let before = pollDevErrors();
+      expect(before.adaptivePolling.shouldStop).toBe(true);
+
+      // A new error occurs in dev
+      recordDevError({
+        name: 'SyntaxError',
+        message: 'Unexpected token',
+        source: 'client'
+      });
+
+      const after = pollDevErrors();
+      expect(after.adaptivePolling.tier).toBe('active_fixing');
+      expect(after.adaptivePolling.recommendedIntervalSeconds).toBe(60);
+      expect(after.adaptivePolling.consecutiveCleanPolls).toBe(0);
+      expect(after.adaptivePolling.shouldStop).toBe(false);
     });
   });
 });

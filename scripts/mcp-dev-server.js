@@ -2,7 +2,7 @@
 
 /**
  * MCP (Model Context Protocol) Dev Error Monitoring & Auto-Fix Server
- * Exposes development errors, deduplication state, and deploy pipeline to Google Antigravity.
+ * Exposes development errors, deduplication state, adaptive backoff advisor, and deploy pipeline to Google Antigravity.
  * Communication: JSON-RPC 2.0 over stdio (MCP standard).
  */
 
@@ -29,14 +29,12 @@ function readErrorStore() {
   } catch (err) {
     console.error('[MCP Dev Server] Error reading store:', err.message);
   }
-  return { version: 1, errors: [] };
+  return { version: 1, consecutiveCleanPolls: 0, errors: [] };
 }
 
 function writeErrorStore(data) {
   try {
-    const tempPath = `${STORE_PATH}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempPath, STORE_PATH);
+    fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
     console.error('[MCP Dev Server] Error writing store:', err.message);
   }
@@ -66,13 +64,68 @@ function getOneLineStatusSummary(errors) {
   return `[Poll @ ${timeStr}] ${inProgress.length} in-progress fixes | ${resolved.length} resolved | 0 unresolved`;
 }
 
+function getAdaptivePollAdvice(store) {
+  const all = store.errors || [];
+  const unresolved = all.filter((e) => e.status === 'unresolved');
+  const inProgress = all.filter((e) => e.status === 'in_progress');
+  const cleanCount = store.consecutiveCleanPolls || 0;
+
+  if (unresolved.length > 0 || inProgress.length > 0) {
+    return {
+      tier: 'active_fixing',
+      recommendedIntervalSeconds: 60,
+      shouldStop: false,
+      reason: `${unresolved.length} active unresolved error(s). High frequency polling active (1m).`,
+      consecutiveCleanPolls: 0
+    };
+  }
+
+  if (cleanCount > 15) {
+    return {
+      tier: 'hibernating',
+      recommendedIntervalSeconds: 0,
+      shouldStop: true,
+      reason: `15+ consecutive clean polls. System healthy and stable. Polling hibernated until next error or file modification.`,
+      consecutiveCleanPolls: cleanCount
+    };
+  }
+
+  if (cleanCount > 8) {
+    return {
+      tier: 'idle_backoff',
+      recommendedIntervalSeconds: 900, // 15m
+      shouldStop: false,
+      reason: `Environment stable (${cleanCount} clean polls). Backed off polling to 15m.`,
+      consecutiveCleanPolls: cleanCount
+    };
+  }
+
+  if (cleanCount > 3) {
+    return {
+      tier: 'low_activity',
+      recommendedIntervalSeconds: 300, // 5m
+      shouldStop: false,
+      reason: `Low activity detected (${cleanCount} clean polls). Backed off polling to 5m.`,
+      consecutiveCleanPolls: cleanCount
+    };
+  }
+
+  return {
+    tier: 'standard',
+    recommendedIntervalSeconds: 120, // 2m
+    shouldStop: false,
+    reason: `Standard dev polling (${cleanCount} clean polls, 2m interval).`,
+    consecutiveCleanPolls: cleanCount
+  };
+}
+
 // --- MCP Tool Handlers ---
 
 const TOOLS = [
   {
     name: 'poll_dev_errors',
     description:
-      'Poll for development errors captured in dev mode. Returns a brief one-line status summary and a list of unresolved errors waiting to be fixed. Excludes already resolved or ignored errors to prevent fixing duplicates.',
+      'Poll for development errors captured in dev mode. Returns a brief one-line status summary, adaptive polling recommendations (suggesting backoff intervals or hibernation when clean), and a list of unresolved errors waiting to be fixed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -167,7 +220,7 @@ const TOOLS = [
   {
     name: 'get_error_stats',
     description:
-      'Returns aggregate statistics regarding active errors, resolved errors, duplicate occurrences caught, and overall dev health.',
+      'Returns aggregate statistics regarding active errors, resolved errors, duplicate occurrences caught, adaptive polling tiers, and overall dev health.',
     inputSchema: {
       type: 'object',
       properties: {}
@@ -199,6 +252,25 @@ async function handleToolCall(name, args) {
       const statusFilter = args.status || 'unresolved';
       const limit = typeof args.limit === 'number' ? args.limit : 10;
 
+      const unresolved = allErrors.filter((e) => e.status === 'unresolved');
+      const inProgress = allErrors.filter((e) => e.status === 'in_progress');
+
+      if (unresolved.length === 0 && inProgress.length === 0) {
+        store.consecutiveCleanPolls = (store.consecutiveCleanPolls || 0) + 1;
+      } else {
+        store.consecutiveCleanPolls = 0;
+      }
+
+      const now = new Date().toISOString();
+      store.lastPollAt = now;
+
+      const oneLineSummary = getOneLineStatusSummary(allErrors);
+      const isStatusChanged = store.lastStatusSummary !== oneLineSummary;
+      store.lastStatusSummary = oneLineSummary;
+
+      const adaptivePolling = getAdaptivePollAdvice(store);
+      writeErrorStore(store);
+
       let filtered = allErrors;
       if (statusFilter === 'active') {
         filtered = allErrors.filter((e) => e.status === 'unresolved' || e.status === 'in_progress');
@@ -206,7 +278,6 @@ async function handleToolCall(name, args) {
         filtered = allErrors.filter((e) => e.status === statusFilter);
       }
 
-      const oneLineSummary = getOneLineStatusSummary(allErrors);
       const topErrors = filtered.slice(0, limit).map((e) => ({
         id: e.id,
         fingerprint: e.fingerprint,
@@ -222,15 +293,21 @@ async function handleToolCall(name, args) {
         fixAttempts: e.fixAttempts
       }));
 
+      let instruction = 'Status: Clean. No unresolved errors.';
+      if (topErrors.length > 0) {
+        instruction = 'Action: Choose an unresolved error, mark it as in_progress using mark_error_status, inspect details using get_error_details, apply code fix, verify with verify_fix, mark resolved, and deploy updates via trigger_auto_deploy.';
+      } else if (adaptivePolling.shouldStop) {
+        instruction = `Notice: ${adaptivePolling.reason} You can stop recurring polling until new errors occur.`;
+      }
+
       return {
         summary: oneLineSummary,
+        isStatusChanged,
+        adaptivePolling,
         filter: statusFilter,
         totalMatching: filtered.length,
         errors: topErrors,
-        instruction:
-          topErrors.length > 0
-            ? 'Action: Choose an unresolved error, mark it as in_progress using mark_error_status, inspect details using get_error_details, apply code fix, verify with verify_fix, mark resolved, and deploy updates via trigger_auto_deploy.'
-            : 'Status: Clean. No unresolved errors.'
+        instruction
       };
     }
 
@@ -256,6 +333,7 @@ async function handleToolCall(name, args) {
       record.status = status;
       if (status === 'in_progress') {
         record.fixAttempts = (record.fixAttempts || 0) + 1;
+        store.consecutiveCleanPolls = 0;
       } else if (status === 'resolved') {
         record.lastFixedAt = new Date().toISOString();
         if (resolutionNote) record.resolutionNote = resolutionNote;
@@ -268,6 +346,7 @@ async function handleToolCall(name, args) {
       return {
         success: true,
         summary: getOneLineStatusSummary(store.errors),
+        adaptivePolling: getAdaptivePollAdvice(store),
         updatedRecord: {
           id: record.id,
           fingerprint: record.fingerprint,
@@ -355,9 +434,11 @@ async function handleToolCall(name, args) {
       };
 
       const duplicatesAvoided = counts.totalOccurrences - counts.totalUniqueFingerprints;
+      const adaptivePolling = getAdaptivePollAdvice(store);
 
       return {
         statusSummary: getOneLineStatusSummary(allErrors),
+        adaptivePolling,
         counts,
         duplicatesAvoided,
         efficiencyRatio:
@@ -374,7 +455,8 @@ async function handleToolCall(name, args) {
       return {
         cleared: before - store.errors.length,
         remaining: store.errors.length,
-        summary: getOneLineStatusSummary(store.errors)
+        summary: getOneLineStatusSummary(store.errors),
+        adaptivePolling: getAdaptivePollAdvice(store)
       };
     }
 

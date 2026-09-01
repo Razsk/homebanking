@@ -259,11 +259,11 @@ function TransactionsContent() {
 
   // Account color palette for color-coded icons
   const ACCOUNT_COLORS = [
-    { bg: "bg-blue-100 text-blue-700 border-blue-200 ring-blue-500", dot: "bg-blue-600" },
-    { bg: "bg-emerald-100 text-emerald-700 border-emerald-200 ring-emerald-500", dot: "bg-emerald-600" },
-    { bg: "bg-purple-100 text-purple-700 border-purple-200 ring-purple-500", dot: "bg-purple-600" },
-    { bg: "bg-amber-100 text-amber-700 border-amber-200 ring-amber-500", dot: "bg-amber-600" },
-    { bg: "bg-rose-100 text-rose-700 border-rose-200 ring-rose-500", dot: "bg-rose-600" },
+    { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-600" },
+    { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-600" },
+    { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-600" },
+    { bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-600" },
+    { bg: "bg-rose-100", text: "text-rose-700", border: "border-rose-200", dot: "bg-rose-600" },
   ];
 
   const getAccountColor = (accountId?: string | null) => {

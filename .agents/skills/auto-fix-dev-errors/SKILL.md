@@ -9,34 +9,41 @@ description: >-
 
 Use this skill when polling or auto-fixing development errors exposed by the Homebanking dev MCP server.
 
-## Workflow Loop
+## Adaptive Polling Workflow
 
 ```
-[Poll via MCP / API] -> [Output 1-Line Status] -> [If Errors: Inspect & Fix] -> [Verify Test] -> [Mark Resolved] -> [Deploy]
+[Poll via MCP] -> [Inspect Adaptive Advice] -> [If Errors: Fix, Verify & Deploy] -> [If Clean: Adapt Frequency or Hibernate]
 ```
 
-### 1. Poll Errors
-Call MCP tool `poll_dev_errors` (or query `/api/dev/errors?status=unresolved`).
-Output the brief one-line status after each poll:
-- Example: `[Poll @ 21:30:15] 1 unresolved: TypeError in app/api/sync/route.ts:42 [fp:8f9b2a1c] | 3 resolved | 0 in progress`
-- Example: `[Poll @ 21:35:00] Clean - 0 active errors | 4 resolved | 0 ignored`
+### 1. Adaptive Frequency Tiers
+The MCP tool `poll_dev_errors` dynamically returns an `adaptivePolling` object:
 
-### 2. Avoid Fixing the Same Error Twice
+| Tier | Condition | Interval | Action |
+| :--- | :--- | :--- | :--- |
+| `active_fixing` | Unresolved or In-Progress errors exist | 60s (1m) | Actively poll, diagnose, and fix. |
+| `standard` | 1–3 consecutive clean polls | 120s (2m) | Normal active dev monitoring. |
+| `low_activity` | 4–8 consecutive clean polls | 300s (5m) | Back off polling frequency. |
+| `idle_backoff` | 9–15 consecutive clean polls | 900s (15m) | Environment stable, low frequency. |
+| `hibernating` | >15 consecutive clean polls | 0s (stop) | Stop polling until next error or modification. |
+
+### 2. Outputting Brief Status
+- On each poll, output the concise one-line status (e.g. `[Poll @ 07:30:00] Clean - 0 active errors | 3 resolved | 0 ignored`).
+- If `adaptivePolling.shouldStop` is true, notify the user that polling is hibernating:
+  `[Poll] System healthy and stable (15+ clean polls). Polling hibernated.`
+
+### 3. Avoid Fixing the Same Error Twice
 - Errors are assigned deterministic SHA-256 fingerprints based on error type, normalized message, file location, and stack frame.
 - If an error has already been marked as `resolved` or `ignored`, repeat occurrences increment `occurrenceCount` and `lastSeenAt` without re-entering the unresolved queue.
 - Only fix errors with status `unresolved`.
 
-### 3. Diagnose & Fix
+### 4. Diagnose & Fix
 - Retrieve full stack and context with MCP tool `get_error_details(errorId)`.
 - Mark status as `in_progress` using `mark_error_status(errorId, "in_progress")`.
 - Identify the root cause in source files and apply minimal, robust fixes.
 
-### 4. Verify Fix
+### 5. Verify Fix
 - Run test suite with MCP tool `verify_fix` or `npm test`.
 
-### 5. Mark Resolved & Prevent Repeats
+### 6. Mark Resolved & Auto-Deploy
 - Call `mark_error_status(errorId, "resolved", resolutionNote="Fixed null pointer check in...")`.
-- The error fingerprint is permanently recorded as resolved to prevent duplicate fixing runs.
-
-### 6. Auto-Deploy Updates
 - Call MCP tool `trigger_auto_deploy` to run `python scripts/build_dist.py` and `python scripts/deploy_dist.py`.

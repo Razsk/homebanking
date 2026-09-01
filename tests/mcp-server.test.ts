@@ -105,6 +105,9 @@ describe('MCP Dev Server Protocol & Tools', () => {
     expect(pollContent.summary).toMatch(/\[Poll @ \d{2}:\d{2}:\d{2}\] 1 unresolved/);
     expect(pollContent.errors.length).toBe(1);
     expect(pollContent.errors[0].id).toBe(err.id);
+    expect(pollContent.adaptivePolling).toBeDefined();
+    expect(pollContent.adaptivePolling.tier).toBe('active_fixing');
+    expect(pollContent.adaptivePolling.recommendedIntervalSeconds).toBe(60);
 
     const detailsRes = responses.find((r) => r.id === 11);
     expect(detailsRes).toBeDefined();

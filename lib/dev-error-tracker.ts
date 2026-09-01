@@ -4,6 +4,7 @@ import crypto from 'crypto';
 
 export type ErrorStatus = 'unresolved' | 'in_progress' | 'resolved' | 'ignored';
 export type ErrorSource = 'client' | 'server' | 'api' | 'build' | 'test' | 'unknown';
+export type AdaptivePollTier = 'active_fixing' | 'standard' | 'low_activity' | 'idle_backoff' | 'hibernating';
 
 export interface DevErrorRecord {
   id: string; // Unique ID (e.g. err_...)
@@ -27,9 +28,20 @@ export interface DevErrorRecord {
   metadata?: Record<string, any>;
 }
 
+export interface AdaptivePollAdvice {
+  tier: AdaptivePollTier;
+  recommendedIntervalSeconds: number;
+  shouldStop: boolean;
+  reason: string;
+  consecutiveCleanPolls: number;
+}
+
 export interface ErrorStoreData {
   version: number;
+  consecutiveCleanPolls?: number;
   lastPollAt?: string;
+  lastErrorAt?: string;
+  lastStatusSummary?: string;
   errors: DevErrorRecord[];
 }
 
@@ -132,6 +144,7 @@ export function readErrorStore(): ErrorStoreData {
 
   return {
     version: 1,
+    consecutiveCleanPolls: 0,
     errors: []
   };
 }
@@ -148,12 +161,65 @@ export function writeErrorStore(data: ErrorStoreData): void {
 }
 
 /**
+ * Calculates adaptive polling recommendation based on current active errors and consecutive clean runs.
+ */
+export function getAdaptivePollAdvice(storeData?: ErrorStoreData): AdaptivePollAdvice {
+  const store = storeData || readErrorStore();
+  const unresolved = store.errors.filter((e) => e.status === 'unresolved');
+  const inProgress = store.errors.filter((e) => e.status === 'in_progress');
+  const cleanCount = store.consecutiveCleanPolls || 0;
+
+  if (unresolved.length > 0 || inProgress.length > 0) {
+    return {
+      tier: 'active_fixing',
+      recommendedIntervalSeconds: 60,
+      shouldStop: false,
+      reason: `${unresolved.length} active unresolved error(s). High frequency polling active (1m).`,
+      consecutiveCleanPolls: 0
+    };
+  }
+
+  if (cleanCount > 15) {
+    return {
+      tier: 'hibernating',
+      recommendedIntervalSeconds: 0,
+      shouldStop: true,
+      reason: `15+ consecutive clean polls. System healthy and stable. Polling hibernated until next error or file modification.`,
+      consecutiveCleanPolls: cleanCount
+    };
+  }
+
+  if (cleanCount > 8) {
+    return {
+      tier: 'idle_backoff',
+      recommendedIntervalSeconds: 900, // 15m
+      shouldStop: false,
+      reason: `Environment stable (${cleanCount} clean polls). Backed off polling to 15m.`,
+      consecutiveCleanPolls: cleanCount
+    };
+  }
+
+  if (cleanCount > 3) {
+    return {
+      tier: 'low_activity',
+      recommendedIntervalSeconds: 300, // 5m
+      shouldStop: false,
+      reason: `Low activity detected (${cleanCount} clean polls). Backed off polling to 5m.`,
+      consecutiveCleanPolls: cleanCount
+    };
+  }
+
+  return {
+    tier: 'standard',
+    recommendedIntervalSeconds: 120, // 2m
+    shouldStop: false,
+    reason: `Standard dev polling (${cleanCount} clean polls, 2m interval).`,
+    consecutiveCleanPolls: cleanCount
+  };
+}
+
+/**
  * Records a new or recurring error into the store.
- * Deduplication logic:
- * - If the fingerprint matches an existing error:
- *   - If status is 'resolved' or 'ignored', increment occurrenceCount, update lastSeenAt, but keep status unless re-opened.
- *   - If status is 'unresolved' or 'in_progress', increment occurrenceCount and update lastSeenAt.
- * - If no match, create a new record with status 'unresolved'.
  */
 export function recordDevError(params: {
   name?: string;
@@ -187,6 +253,10 @@ export function recordDevError(params: {
     if (params.metadata) {
       record.metadata = { ...record.metadata, ...params.metadata };
     }
+    if (record.status === 'unresolved') {
+      store.consecutiveCleanPolls = 0;
+      store.lastErrorAt = now;
+    }
   } else {
     // New error
     record = {
@@ -209,6 +279,8 @@ export function recordDevError(params: {
       metadata: params.metadata
     };
     store.errors.unshift(record);
+    store.consecutiveCleanPolls = 0;
+    store.lastErrorAt = now;
   }
 
   writeErrorStore(store);
@@ -276,7 +348,66 @@ export function getOneLineStatusSummary(errors?: DevErrorRecord[]): string {
 }
 
 /**
- * Gets errors filtered by status.
+ * Polls dev errors, updates consecutive clean polls counter, and returns adaptive polling advice.
+ */
+export function pollDevErrors(filter?: { status?: ErrorStatus | 'active' | 'all'; source?: ErrorSource }): {
+  summary: string;
+  isStatusChanged: boolean;
+  adaptivePolling: AdaptivePollAdvice;
+  errors: DevErrorRecord[];
+  counts: { unresolved: number; inProgress: number; resolved: number; ignored: number; total: number };
+} {
+  const store = readErrorStore();
+  const unresolved = store.errors.filter((e) => e.status === 'unresolved');
+  const inProgress = store.errors.filter((e) => e.status === 'in_progress');
+
+  if (unresolved.length === 0 && inProgress.length === 0) {
+    store.consecutiveCleanPolls = (store.consecutiveCleanPolls || 0) + 1;
+  } else {
+    store.consecutiveCleanPolls = 0;
+  }
+
+  const now = new Date().toISOString();
+  store.lastPollAt = now;
+
+  const currentSummary = getOneLineStatusSummary(store.errors);
+  const isStatusChanged = store.lastStatusSummary !== currentSummary;
+  store.lastStatusSummary = currentSummary;
+
+  const adaptivePolling = getAdaptivePollAdvice(store);
+  writeErrorStore(store);
+
+  let filteredErrors = store.errors;
+  if (filter?.status === 'active') {
+    filteredErrors = filteredErrors.filter((e) => e.status === 'unresolved' || e.status === 'in_progress');
+  } else if (filter?.status && filter.status !== 'all') {
+    filteredErrors = filteredErrors.filter((e) => e.status === filter.status);
+  }
+
+  if (filter?.source) {
+    filteredErrors = filteredErrors.filter((e) => e.source === filter.source);
+  }
+
+  const all = store.errors;
+  const counts = {
+    unresolved: all.filter((e) => e.status === 'unresolved').length,
+    inProgress: all.filter((e) => e.status === 'in_progress').length,
+    resolved: all.filter((e) => e.status === 'resolved').length,
+    ignored: all.filter((e) => e.status === 'ignored').length,
+    total: all.length
+  };
+
+  return {
+    summary: currentSummary,
+    isStatusChanged,
+    adaptivePolling,
+    errors: filteredErrors,
+    counts
+  };
+}
+
+/**
+ * Gets errors without modifying polling state.
  */
 export function getDevErrors(filter?: { status?: ErrorStatus | 'active' | 'all'; source?: ErrorSource }): {
   summary: string;
@@ -316,5 +447,5 @@ export function getDevErrors(filter?: { status?: ErrorStatus | 'active' | 'all';
  * Clear or reset error store (useful for testing or full cleanup).
  */
 export function resetDevErrorStore(): void {
-  writeErrorStore({ version: 1, errors: [] });
+  writeErrorStore({ version: 1, consecutiveCleanPolls: 0, errors: [] });
 }
