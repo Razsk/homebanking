@@ -19,18 +19,18 @@ export async function GET() {
     const thisMonthTxs = transactions.filter((t) => new Date(t.date) >= startOfMonth);
 
     const monthlyIncome = thisMonthTxs
-      .filter((t) => t.amount > 0 && !t.text.toLowerCase().includes("overførsel"))
+      .filter((t) => t.amount > 0 && !(t.text || "").toLowerCase().includes("overførsel"))
       .reduce((sum, t) => sum + t.amount, 0);
 
     const monthlyExpense = thisMonthTxs
-      .filter((t) => t.amount < 0 && !t.text.toLowerCase().includes("overførsel til"))
+      .filter((t) => t.amount < 0 && !(t.text || "").toLowerCase().includes("overførsel til"))
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
     // Group expenses by category
     const categoryTotals: { [key: string]: { name: string; color: string; total: number; count: number } } = {};
 
     for (const tx of thisMonthTxs) {
-      if (tx.amount < 0 && !tx.text.toLowerCase().includes("overførsel til opsparing")) {
+      if (tx.amount < 0 && !(tx.text || "").toLowerCase().includes("overførsel til opsparing")) {
         const catName = tx.category ? tx.category.name : "Ukategoriseret";
         const catColor = tx.category ? tx.category.color : "#94a3b8";
 
@@ -61,9 +61,9 @@ export async function GET() {
         monthsMap[key] = { month: monthLabel, income: 0, expense: 0 };
       }
 
-      if (tx.amount > 0 && !tx.text.toLowerCase().includes("overførsel")) {
+      if (tx.amount > 0 && !(tx.text || "").toLowerCase().includes("overførsel")) {
         monthsMap[key].income += tx.amount;
-      } else if (tx.amount < 0 && !tx.text.toLowerCase().includes("overførsel")) {
+      } else if (tx.amount < 0 && !(tx.text || "").toLowerCase().includes("overførsel")) {
         monthsMap[key].expense += Math.abs(tx.amount);
       }
     }
