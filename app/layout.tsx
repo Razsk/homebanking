@@ -108,6 +108,31 @@ export default function RootLayout({
                       throw err;
                     });
                   };
+
+                  // 4. Intercept console.error calls in page context
+                  var originalConsoleError = console.error;
+                  console.error = function() {
+                    originalConsoleError.apply(console, arguments);
+                    try {
+                      var args = Array.prototype.slice.call(arguments);
+                      var msg = args.map(function(arg) {
+                        if (arg instanceof Error) return arg.message + '\\n' + (arg.stack || '');
+                        if (typeof arg === 'object') {
+                          try { return JSON.stringify(arg); } catch(e) { return String(arg); }
+                        }
+                        return String(arg);
+                      }).join(' ');
+                      
+                      if (!msg || msg.indexOf('/api/dev/errors') !== -1) return;
+                      
+                      report({
+                        name: 'ConsoleError',
+                        message: msg.slice(0, 1000),
+                        source: 'client',
+                        route: window.location.pathname
+                      });
+                    } catch(e) {}
+                  };
                 })();
               `,
             }}
