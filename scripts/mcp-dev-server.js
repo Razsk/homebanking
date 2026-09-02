@@ -404,10 +404,18 @@ async function handleToolCall(name, args) {
     case 'verify_fix': {
       const command = args.command || 'npm test';
       try {
+        const cleanEnv = { ...process.env };
+        delete cleanEnv.NODE_OPTIONS;
+        delete cleanEnv.ELECTRON_RUN_AS_NODE;
+
         const testOutput = execSync(command, {
           cwd: PROJECT_ROOT,
           encoding: 'utf-8',
-          stdio: 'pipe'
+          stdio: 'pipe',
+          shell: true,
+          env: cleanEnv,
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 120000
         });
         return {
           success: true,
@@ -415,10 +423,11 @@ async function handleToolCall(name, args) {
           output: testOutput.trim()
         };
       } catch (err) {
+        const out = [err.stdout, err.stderr, err.message].filter(Boolean).join('\n');
         return {
           success: false,
           command,
-          output: err.stdout || err.stderr || err.message
+          output: out
         };
       }
     }
