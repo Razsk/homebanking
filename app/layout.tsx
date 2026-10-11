@@ -51,9 +51,19 @@ export default function RootLayout({
                         return;
                       }
                       if (event.message) {
+                        var errMsg = event.message || '';
+                        var errFile = event.filename || '';
+                        if (
+                          errMsg.indexOf('Access to storage') !== -1 ||
+                          errMsg.indexOf('extension') !== -1 ||
+                          errFile.indexOf('extension') !== -1 ||
+                          errFile.indexOf('content.js') !== -1
+                        ) {
+                          return;
+                        }
                         report({
                           name: event.error ? event.error.name : 'UncaughtError',
-                          message: event.message,
+                          message: errMsg,
                           stack: event.error ? event.error.stack : undefined,
                           source: 'client',
                           route: window.location.pathname
@@ -67,7 +77,17 @@ export default function RootLayout({
                     try {
                       var reason = event.reason;
                       var msg = typeof reason === 'string' ? reason : (reason && reason.message ? reason.message : 'Unhandled rejection');
-                      if (msg.indexOf('/api/dev/errors') !== -1) return;
+                      if (
+                        !msg ||
+                        msg.indexOf('/api/dev/errors') !== -1 ||
+                        msg.indexOf('Access to storage') !== -1 ||
+                        msg.indexOf('extension') !== -1
+                      ) {
+                        return;
+                      }
+                      var stack = reason && reason.stack ? reason.stack : '';
+                      if (stack.indexOf('extension') !== -1 || stack.indexOf('content.js') !== -1) return;
+
                       report({
                         name: reason && reason.name ? reason.name : 'UnhandledPromiseRejection',
                         message: msg,
@@ -123,7 +143,14 @@ export default function RootLayout({
                         return String(arg);
                       }).join(' ');
                       
-                      if (!msg || msg.indexOf('/api/dev/errors') !== -1) return;
+                      if (
+                        !msg ||
+                        msg.indexOf('/api/dev/errors') !== -1 ||
+                        msg.indexOf('Access to storage') !== -1 ||
+                        msg.indexOf('extension') !== -1
+                      ) {
+                        return;
+                      }
                       
                       report({
                         name: 'ConsoleError',
