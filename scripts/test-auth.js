@@ -43,7 +43,8 @@ const body = JSON.stringify({
 });
 
 const date365 = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-fetch("https://api.enablebanking.com/accounts/9da0a936-7d64-4d93-9ce9-4e6dee0ac0d3/transactions?date_from=" + date365, {
+const targetAccountId = process.env.TEST_ACCOUNT_ID || "YOUR_ACCOUNT_ID";
+fetch(`https://api.enablebanking.com/accounts/${targetAccountId}/transactions?date_from=` + date365, {
   method: "GET",
   headers: {
     Authorization: "Bearer " + token,

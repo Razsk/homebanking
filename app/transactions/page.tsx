@@ -13,7 +13,11 @@ import {
   Check, 
   SlidersHorizontal,
   CreditCard,
-  Layers
+  Layers,
+  Sparkles,
+  Tag,
+  CheckCircle2,
+  X
 } from "lucide-react";
 import { SyncButton } from "../components/SyncButton";
 
@@ -38,6 +42,13 @@ function TransactionsContent() {
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // Search bulk action state
+  const [searchCategory, setSearchCategory] = useState("");
+  const [searchCreateRule, setSearchCreateRule] = useState(true);
+  const [searchIsSub, setSearchIsSub] = useState(false);
+  const [searchApplying, setSearchApplying] = useState(false);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -248,12 +259,77 @@ function TransactionsContent() {
       });
       if (res.ok) {
         setRuleModalOpen(false);
+        setSearch("");
         // re-run sync/classification
         await fetch("/api/sync", { method: "POST" });
         loadData();
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleApplySearchClassification = async () => {
+    if (!searchCategory || !search.trim()) return;
+    try {
+      setSearchApplying(true);
+
+      const targetCat = categories.find((c) => c.id === searchCategory);
+      let ruleCreated = false;
+      const searchedTerm = search.trim();
+
+      // 1. Create rule if requested
+      if (searchCreateRule) {
+        const ruleRes = await fetch("/api/rules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pattern: searchedTerm,
+            categoryId: searchCategory,
+            isSubscription: searchIsSub,
+            matchType: "contains",
+            priority: 20,
+          }),
+        });
+        if (ruleRes.ok) {
+          ruleCreated = true;
+        }
+      }
+
+      // 2. Bulk update all matching transactions in database
+      const patchRes = await fetch("/api/transactions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filter: {
+            search: searchedTerm,
+            accountId: selectedAccount || undefined,
+            categoryId: selectedCategory || undefined,
+            isSubscription: onlySubscriptions ? "true" : undefined,
+          },
+          categoryId: searchCategory,
+          isSubscription: searchIsSub ? true : undefined,
+        }),
+      });
+
+      const patchData = await patchRes.json();
+      const updatedCount = patchData.count !== undefined ? patchData.count : totalCount;
+
+      const msg = `${updatedCount} ${updatedCount === 1 ? "postering" : "posteringer"} blev klassificeret som '${targetCat?.name || "Kategori"}'${ruleCreated ? ` og ny automatisk regel for '${searchedTerm}' blev oprettet` : ""}.`;
+      setSuccessBanner(msg);
+      setTimeout(() => setSuccessBanner(null), 6000);
+
+      // Reset search field and category selection after rule creation / classification
+      setSearch("");
+      setSearchCategory("");
+      setSearchIsSub(false);
+
+      // Reload data
+      await loadData();
+    } catch (e) {
+      console.error("Fejl ved klassificering:", e);
+    } finally {
+      setSearchApplying(false);
     }
   };
 
@@ -451,6 +527,112 @@ function TransactionsContent() {
           <span>Kun Faste Abonnementer</span>
         </button>
       </div>
+
+      {/* Search Mass-Classification & Rule Banner */}
+      {search.trim().length > 0 && (
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-white rounded-2xl border border-blue-200/90 p-4 sm:p-5 shadow-xs transition-all animate-in fade-in slide-in-from-top-2">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <SlidersHorizontal className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Klassificér alle fundne posteringer for &ldquo;<span className="text-blue-600 font-mono font-bold">{search.trim()}</span>&rdquo;
+                  </h4>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                    {totalCount} {totalCount === 1 ? "postering" : "posteringer"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Vælg en kategori for at masse-opdatere alle matchende poster og opret eventuelt søgningen som en ny automatisk regel.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Category selector */}
+              <div className="relative">
+                <select
+                  value={searchCategory}
+                  onChange={(e) => setSearchCategory(e.target.value)}
+                  disabled={searchApplying}
+                  className="px-3 py-2 text-xs font-semibold bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 shadow-2xs cursor-pointer min-w-[180px]"
+                >
+                  <option value="">Vælg kategori...</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Create Rule checkbox */}
+              <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer bg-white border border-slate-200 px-3 py-2 rounded-xl hover:bg-slate-50 select-none shadow-2xs">
+                <input
+                  type="checkbox"
+                  checked={searchCreateRule}
+                  onChange={(e) => setSearchCreateRule(e.target.checked)}
+                  disabled={searchApplying}
+                  className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
+                />
+                <span>Opret regel for &ldquo;{search.trim()}&rdquo;</span>
+              </label>
+
+              {/* Is Subscription checkbox */}
+              <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer bg-white border border-slate-200 px-3 py-2 rounded-xl hover:bg-slate-50 select-none shadow-2xs">
+                <input
+                  type="checkbox"
+                  checked={searchIsSub}
+                  onChange={(e) => setSearchIsSub(e.target.checked)}
+                  disabled={searchApplying}
+                  className="rounded text-purple-600 focus:ring-purple-500 h-3.5 w-3.5 cursor-pointer"
+                />
+                <Repeat className="w-3.5 h-3.5 text-purple-600" />
+                <span>Fast abonnement</span>
+              </label>
+
+              {/* Action Button */}
+              <button
+                type="button"
+                onClick={handleApplySearchClassification}
+                disabled={!searchCategory || searchApplying}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-xs hover:shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                {searchApplying ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Gemmer...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Klassificér alle ({totalCount})</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Notification Banner */}
+      {successBanner && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-2xl flex items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span className="text-xs sm:text-sm font-semibold">{successBanner}</span>
+          </div>
+          <button
+            onClick={() => setSuccessBanner(null)}
+            className="text-emerald-700 hover:text-emerald-900 p-1 rounded-lg hover:bg-emerald-100 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Transactions Table */}
       <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm">

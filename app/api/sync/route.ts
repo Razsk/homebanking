@@ -44,6 +44,21 @@ export async function POST(req: Request) {
     let totalSynced = 0;
 
     for (const acc of currentAccounts) {
+      // Sync live account balances
+      try {
+        const bal = await client.fetchBalances(acc.id);
+        await prisma.account.update({
+          where: { id: acc.id },
+          data: {
+            balance: bal.balance,
+            bookedBalance: bal.bookedBalance,
+            availableBalance: bal.availableBalance,
+          },
+        });
+      } catch (balErr) {
+        console.warn(`Kunne ikke opdatere saldo for konto ${acc.id}:`, balErr);
+      }
+
       const bankTxs = await client.fetchTransactions(acc.id, effectiveDateFrom);
 
       for (const tx of bankTxs) {

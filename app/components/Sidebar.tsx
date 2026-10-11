@@ -25,7 +25,7 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col justify-between h-screen sticky top-0 border-r border-slate-800 shrink-0">
+    <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col justify-between h-screen sticky top-0 border-r border-slate-800 shrink-0 print:hidden">
       <div>
         {/* Brand Header */}
         <div className="p-6 border-b border-slate-800 flex items-center justify-between">

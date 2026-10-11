@@ -190,21 +190,10 @@ export class EnableBankingClient {
 
       // Fetch live balances
       try {
-        const balRes = await fetch(`${this.baseUrl}/accounts/${encodeURIComponent(accUid)}/balances`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (balRes.ok) {
-          const balData = await balRes.json();
-          for (const b of balData.balances || []) {
-            const val = parseFloat(b.balance_amount?.amount || b.amount || "0");
-            if (b.balance_type === "closingBooked" || b.balance_type === "interimBooked" || b.balance_type === "expected") {
-              bookedBalance = val;
-              balance = val;
-            } else if (b.balance_type === "interimAvailable" || b.balance_type === "openingAvailable") {
-              availableBalance = val;
-            }
-          }
-        }
+        const bal = await this.fetchBalances(accUid);
+        balance = bal.balance;
+        bookedBalance = bal.bookedBalance;
+        availableBalance = bal.availableBalance;
       } catch (e) {
         console.warn("Kunne ikke hente saldi for konto", accUid, e);
       }
@@ -229,6 +218,88 @@ export class EnableBankingClient {
     return {
       sessionId: data.session_id,
       accounts,
+    };
+  }
+
+  public async fetchBalances(accountId: string): Promise<{
+    balance: number;
+    bookedBalance: number;
+    availableBalance: number;
+  }> {
+    if (!this.isConfigured()) {
+      throw new Error("Enable Banking er ikke konfigureret.");
+    }
+
+    const token = this.generateToken();
+    const balRes = await fetch(`${this.baseUrl}/accounts/${encodeURIComponent(accountId)}/balances`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!balRes.ok) {
+      const err = await balRes.text();
+      throw new Error(`Enable Banking /balances fejl (${balRes.status}): ${err}`);
+    }
+
+    const balData = await balRes.json();
+    let balance = 0;
+    let bookedBalance = 0;
+    let availableBalance = 0;
+    let hasBooked = false;
+    let hasAvailable = false;
+
+    for (const b of balData.balances || []) {
+      const val = parseFloat(b.balance_amount?.amount || b.amount || "0");
+      const type = (b.balance_type || "").toUpperCase();
+      const name = (b.name || "").toLowerCase();
+
+      // Booked balance types: ITBD (Interim Booked), CLBD (Closing Booked), XPCD (Expected), PRCD
+      if (
+        type === "ITBD" ||
+        type === "CLBD" ||
+        type === "XPCD" ||
+        type === "PRCD" ||
+        type === "CLOSINGBOOKED" ||
+        type === "INTERIMBOOKED" ||
+        type === "EXPECTED" ||
+        name.includes("booked") ||
+        name.includes("bogført")
+      ) {
+        bookedBalance = val;
+        balance = val;
+        hasBooked = true;
+      } 
+      // Available balance types: ITAV (Interim Available), OPAV (Opening Available), AVLB
+      else if (
+        type === "ITAV" ||
+        type === "OPAV" ||
+        type === "AVLB" ||
+        type === "INTERIMAVAILABLE" ||
+        type === "OPENINGAVAILABLE" ||
+        name.includes("available") ||
+        name.includes("disponibel")
+      ) {
+        availableBalance = val;
+        hasAvailable = true;
+      }
+    }
+
+    // Fallbacks if only one balance type is provided or none matched explicitly
+    if (!hasBooked && hasAvailable) {
+      bookedBalance = availableBalance;
+      balance = availableBalance;
+    } else if (hasBooked && !hasAvailable) {
+      availableBalance = bookedBalance;
+    } else if (!hasBooked && !hasAvailable && Array.isArray(balData.balances) && balData.balances.length > 0) {
+      const firstVal = parseFloat(balData.balances[0].balance_amount?.amount || balData.balances[0].amount || "0");
+      balance = firstVal;
+      bookedBalance = firstVal;
+      availableBalance = firstVal;
+    }
+
+    return {
+      balance,
+      bookedBalance,
+      availableBalance: hasAvailable || hasBooked ? availableBalance : balance,
     };
   }
 

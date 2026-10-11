@@ -142,7 +142,7 @@ export default function RootLayout({
       <body className="bg-slate-50 text-slate-900 flex min-h-screen" suppressHydrationWarning>
         <DevErrorBoundary>
           <Sidebar />
-          <main className="flex-1 min-w-0 p-8 overflow-y-auto max-w-7xl mx-auto">
+          <main className="flex-1 min-w-0 p-8 overflow-y-auto max-w-7xl mx-auto print:p-0 print:max-w-none print:overflow-visible print:w-full print:block">
             {children}
           </main>
         </DevErrorBoundary>
