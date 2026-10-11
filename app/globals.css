@@ -36,9 +36,15 @@ body {
     size: A4 portrait;
     margin: 10mm 12mm;
   }
-  body {
+  html, body {
     background: #ffffff !important;
     color: #000000 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  body {
+    display: block !important;
   }
   .no-print,
   aside,

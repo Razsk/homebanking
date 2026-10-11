@@ -593,8 +593,9 @@ export default function SubscriptionsPage() {
   }, [subscriptionsToPrint]);
 
   return (
-    <div className={`space-y-8 ${printModalOpen ? "print:hidden" : ""}`}>
-      {/* Header */}
+    <>
+      <div className={`space-y-8 ${printModalOpen ? "print:hidden" : ""}`}>
+        {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Abonnementer & Faste Udgifter</h1>
@@ -1623,6 +1624,7 @@ export default function SubscriptionsPage() {
           </div>
         </div>
       )}
+      </div>
 
       {/* Floating Selection Action Bar */}
       {selectedIds.length > 0 && (
@@ -1666,8 +1668,8 @@ export default function SubscriptionsPage() {
 
       {/* Printer-Friendly Report Preview Modal */}
       {printModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex justify-center p-3 sm:p-6 print:p-0 print:static print:bg-white print:overflow-visible">
-          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 flex flex-col my-auto print:shadow-none print:border-none print:max-w-none print:w-full print:m-0 print:rounded-none">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex justify-center p-3 sm:p-6 print:p-0 print:m-0 print:static print:bg-white print:overflow-visible print:block print:w-full print:h-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 flex flex-col my-auto print:shadow-none print:border-none print:max-w-none print:w-full print:m-0 print:rounded-none print:static print:block print:h-auto">
             {/* Modal Screen Header (Hidden when printing) */}
             <div className="p-4 sm:px-6 border-b border-slate-200 flex items-center justify-between bg-slate-50 rounded-t-2xl print:hidden">
               <div className="flex items-center gap-2.5">
@@ -1893,6 +1895,6 @@ export default function SubscriptionsPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

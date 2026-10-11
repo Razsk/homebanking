@@ -139,7 +139,7 @@ export default function RootLayout({
           />
         )}
       </head>
-      <body className="bg-slate-50 text-slate-900 flex min-h-screen" suppressHydrationWarning>
+      <body className="bg-slate-50 text-slate-900 flex min-h-screen print:bg-white print:block print:min-h-0 print:h-auto print:w-full" suppressHydrationWarning>
         <DevErrorBoundary>
           <Sidebar />
           <main className="flex-1 min-w-0 p-8 overflow-y-auto max-w-7xl mx-auto print:p-0 print:max-w-none print:overflow-visible print:w-full print:block">
